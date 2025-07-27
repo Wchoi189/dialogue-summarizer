@@ -6,10 +6,11 @@ defaults:
   - dataset: dialogue_data
   - training: baseline
   - inference: generation
+  - preprocessing: standard
   - _self_
 
 # Experiment settings
-experiment_name: "dialogue_summarization"
+experiment_name: "dialogue-summarization"
 run_name: null  # Auto-generated if null
 seed: 42
 
@@ -27,13 +28,14 @@ logging:
 
 # WandB configuration
 wandb:
-  project: "dialogue-summarization"
-  entity: null  # Set your wandb entity
-  name: "${run_name}"
+  project: "dialogue-summarization(wb2x)"
+  entity: "boot_camp_13_2nd_group_2nd"  # Set your wandb entity
+  username: "wchoi189@gmail.com"
+  # name: null  # Let the WandBManager generate the name automatically
   tags: ["baseline", "kobart"]
   notes: "Dialogue summarization with KoBART"
   offline: false
-  log_model: true
+  log_model: false
   watch: false
 
 # Hardware settings

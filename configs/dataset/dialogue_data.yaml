@@ -46,6 +46,7 @@ val_split_ratio: null
 
 # Data loading
 batch_size: 32
+eval_batch_size: 32  # Batch size for validation and testing
 shuffle_train: true
 shuffle_val: false
 drop_last: false

@@ -44,9 +44,11 @@ class DialoguePreprocessor:
         special_tokens = self.preprocessing_cfg.special_tokens
         
         if special_tokens:
-            special_tokens_dict = {"additional_special_tokens": special_tokens}
+            # Ensure special tokens are strings
+            special_tokens_list = [str(token) for token in special_tokens]
+            special_tokens_dict = {"additional_special_tokens": special_tokens_list}
             num_added = self.tokenizer.add_special_tokens(special_tokens_dict)
-            ic(f"Added {num_added} special tokens: {special_tokens}")
+            ic(f"Added {num_added} special tokens: {special_tokens_list}")
     
     def clean_text(self, text: str) -> str:
         """

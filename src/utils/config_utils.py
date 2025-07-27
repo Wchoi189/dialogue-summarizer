@@ -108,49 +108,49 @@ class ConfigManager:
             raise
     
     def validate_config(self, cfg: DictConfig) -> bool:
-        """
-        Validate configuration for required fields and data types.
-        
-        Args:
-            cfg: Configuration to validate
+            """
+            Validate configuration for required fields and data types.
             
-        Returns:
-            True if configuration is valid
+            Args:
+                cfg: Configuration to validate
+                
+            Returns:
+                True if configuration is valid
+                
+            Raises:
+                ValueError: If configuration is invalid
+            """
+            required_sections = ["dataset", "model", "training"]
             
-        Raises:
-            ValueError: If configuration is invalid
-        """
-        required_sections = ["dataset", "model", "training"]
-        
-        for section in required_sections:
-            if section not in cfg:
-                raise ValueError(f"Missing required config section: {section}")
-        
-        # Validate dataset config
-        if "data_path" not in cfg.dataset:
-            raise ValueError("dataset.data_path is required")
-        
-        data_path = Path(cfg.dataset.data_path)
-        if not data_path.exists():
-            raise ValueError(f"Data path does not exist: {data_path}")
-        
-        # Validate required data files
-        required_files = ["train.csv", "dev.csv", "test.csv"]
-        for file_name in required_files:
-            file_path = data_path / file_name
-            if not file_path.exists():
-                raise ValueError(f"Required data file not found: {file_path}")
-        
-        # Validate model config
-        if "name" not in cfg.model:
-            raise ValueError("model.name is required")
-        
-        # Validate training config  
-        if "num_epochs" not in cfg.training:
-            raise ValueError("training.num_epochs is required")
-        
-        logger.info("Configuration validation passed")
-        return True
+            for section in required_sections:
+                if section not in cfg:
+                    raise ValueError(f"Missing required config section: {section}")
+            
+            # Validate dataset config
+            if "data_path" not in cfg.dataset:
+                raise ValueError("dataset.data_path is required")
+            
+            data_path = Path(cfg.dataset.data_path)
+            if not data_path.exists():
+                raise ValueError(f"Data path does not exist: {data_path}")
+            
+            # Validate required data files
+            required_files = ["train.csv", "dev.csv", "test.csv"]
+            for file_name in required_files:
+                file_path = data_path / file_name
+                if not file_path.exists():
+                    raise ValueError(f"Required data file not found: {file_path}")
+            
+            # Validate model config
+            if "name" not in cfg.model:
+                raise ValueError("model.name is required")
+            
+            # Validate training config (use max_epochs instead of num_epochs)
+            if "max_epochs" not in cfg.training:
+                raise ValueError("training.max_epochs is required")
+            
+            logger.info("Configuration validation passed")
+            return True
     
     def save_config(
         self, 

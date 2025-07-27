@@ -14,7 +14,7 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
-from ..utils.file_utils import FileManager
+from utils.file_utils import FileManager
 from .dataset import create_collate_fn, create_datasets
 from .preprocessing import DataValidator, DialoguePreprocessor, create_preprocessor
 

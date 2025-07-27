@@ -9,11 +9,11 @@ dependencies:
   # Python
   - python=3.10.13
 
-  # PyTorch ecosystem (conda for better CUDA compatibility)
-  - pytorch>=2.0.0
-  - pytorch-cuda=11.8
-  - torchvision
-  - torchaudio
+  # PyTorch ecosystem with CUDA 12.4 support (compatible with CUDA 12.2)
+  - pytorch=2.5.1=*cuda*  # Force CUDA version, not CPU
+  - torchvision=*=*cu124*  # CUDA 12.4 version
+  - torchaudio=*=*cu124*   # CUDA 12.4 version
+  - pytorch-cuda=12.4      # CUDA 12.4 is compatible with driver 12.2
 
   # Core ML libraries via conda
   - numpy>=1.24.0

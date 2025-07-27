@@ -45,10 +45,42 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         self.training_metrics = {}
         self.validation_metrics = {}
         
+        # Store validation outputs for epoch end processing (PyTorch Lightning v2.0+)
+        self.validation_step_outputs = []
+        
         # Generation config
         self.generation_config = self._setup_generation_config()
         
         ic(f"BaseSummarizationModel initialized")
+    
+    def clear_gpu_memory(self) -> None:
+        """Clear GPU memory cache."""
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+    
+    def get_gpu_memory_usage(self) -> Dict[str, float]:
+        """Get current GPU memory usage."""
+        if not torch.cuda.is_available():
+            return {"allocated": 0.0, "cached": 0.0, "total": 0.0}
+        
+        allocated = torch.cuda.memory_allocated() / 1024**3  # GB
+        cached = torch.cuda.memory_reserved() / 1024**3  # GB
+        total = torch.cuda.get_device_properties(0).total_memory / 1024**3  # GB
+        
+        return {
+            "allocated": allocated,
+            "cached": cached,
+            "total": total,
+            "free": total - allocated
+        }
+    
+    def log_gpu_memory(self, step_name: str = "") -> None:
+        """Log current GPU memory usage."""
+        if torch.cuda.is_available():
+            memory = self.get_gpu_memory_usage()
+            ic(f"{step_name} GPU Memory - Allocated: {memory['allocated']:.2f}GB, "
+               f"Cached: {memory['cached']:.2f}GB, Free: {memory['free']:.2f}GB")
     
     @abstractmethod
     def _setup_model(self) -> None:
@@ -65,12 +97,12 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         gen_cfg = self.training_cfg.get("generation", {})
         
         return {
-            "max_length": gen_cfg.get("max_length", 100),
+            "max_length": gen_cfg.get("max_length", 50),  # Reduced from 100
             "min_length": gen_cfg.get("min_length", 1),
-            "num_beams": gen_cfg.get("num_beams", 4),
+            "num_beams": 1,  # Greedy decoding instead of beam search
             "no_repeat_ngram_size": gen_cfg.get("no_repeat_ngram_size", 2),
             "early_stopping": gen_cfg.get("early_stopping", True),
-            "do_sample": gen_cfg.get("do_sample", False),
+            "do_sample": False,  # Greedy decoding
             "length_penalty": gen_cfg.get("length_penalty", 1.0),
         }
     
@@ -117,6 +149,10 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         Returns:
             Loss tensor
         """
+        # Log memory before step
+        if batch_idx % 50 == 0:  # Log every 50 steps
+            self.log_gpu_memory(f"Training step {batch_idx} start")
+        
         outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
         loss = outputs.loss
         
@@ -125,6 +161,10 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         
         # Store metrics
         self.training_metrics["loss"] = loss.item()
+        
+        # Clear GPU memory periodically
+        if batch_idx % 10 == 0:  # Clear every 10 steps
+            self.clear_gpu_memory()
         
         return loss
     
@@ -139,9 +179,16 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         Returns:
             Dictionary with outputs
         """
+        # Log memory before step
+        if batch_idx % 10 == 0:  # Log every 10 validation steps
+            self.log_gpu_memory(f"Validation step {batch_idx} start")
+        
         # Forward pass for loss calculation
         outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
         loss = outputs.loss
+        
+        # Clear memory after forward pass
+        self.clear_gpu_memory()
         
         # Generate predictions for evaluation
         predictions = self.generate(
@@ -149,24 +196,36 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             attention_mask=batch["attention_mask"]
         )
         
+        # Clear memory after generation
+        self.clear_gpu_memory()
+        
         # Decode predictions and targets
         pred_texts = self._decode_predictions(predictions)
         target_texts = self._decode_targets(batch["labels"])
         
-        return {
+        step_output = {
             "loss": loss,
             "predictions": pred_texts,
             "targets": target_texts,
             "sample_ids": batch["sample_ids"]
         }
+        
+        # Store outputs for epoch end processing (PyTorch Lightning v2.0+)
+        self.validation_step_outputs.append(step_output)
+        
+        return step_output
     
-    def validation_epoch_end(self, outputs: List[Dict[str, Any]]) -> None:
+    def on_validation_epoch_end(self) -> None:
         """
         Process validation epoch end.
         
-        Args:
-            outputs: List of validation step outputs
+        Uses stored outputs from validation steps (PyTorch Lightning v2.0+ compatible).
         """
+        outputs = self.validation_step_outputs
+        
+        if not outputs:
+            return
+        
         # Calculate average loss
         avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
         
@@ -193,6 +252,13 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         }
         
         ic(f"Validation metrics: {self.validation_metrics}")
+        
+        # Clear outputs for next epoch (PyTorch Lightning v2.0+)
+        self.validation_step_outputs.clear()
+        
+        # Clear GPU memory after validation epoch
+        self.clear_gpu_memory()
+        self.log_gpu_memory("Validation epoch end")
     
     def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, Any]:
         """

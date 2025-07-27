@@ -3,19 +3,19 @@
 
 # Training strategy
 strategy: "auto"  # auto, ddp, ddp_spawn, etc.
-accelerator: "auto"  # auto, gpu, cpu
-devices: "auto"  # auto, [0], [0,1], etc.
-precision: "16-mixed"  # 16, 32, bf16-mixed, 16-mixed
+accelerator: "gpu"  # GPU acceleration enabled
+devices: 1  # Single GPU device
+precision: "16-mixed"  # Mixed precision for faster training
 
 # Epochs and steps
-max_epochs: 20
+max_epochs: 3  # Reduced for testing
 max_steps: -1  # Use max_epochs instead
 min_epochs: 1
 
 # Batch sizes
-batch_size: 50  # Per device train batch size (from baseline)
-eval_batch_size: 32  # Per device eval batch size
-accumulate_grad_batches: 1
+batch_size: 4  # Reduced for GPU memory efficiency (RTX 3090)
+eval_batch_size: 2  # Reduced for GPU memory efficiency
+accumulate_grad_batches: 8  # Maintain effective batch size of 32
 
 # Optimizer
 optimizer:
@@ -41,9 +41,9 @@ predict_with_generate: true
 
 # Generation settings for validation
 generation:
-  max_length: 100
+  max_length: 50  # Reduced for memory efficiency
   min_length: 1
-  num_beams: 4
+  num_beams: 1  # Greedy decoding to avoid memory issues
   no_repeat_ngram_size: 2
   early_stopping: true
   do_sample: false
@@ -91,7 +91,7 @@ amp_level: "O1"
 fast_dev_run: false
 overfit_batches: 0.0
 limit_train_batches: 1.0
-limit_val_batches: 1.0
+limit_val_batches: 1.0  # Use full validation dataset
 limit_test_batches: 1.0
 
 # Profiler

@@ -1,0 +1,25 @@
+# @package _global_
+# Standard preprocessing configuration for dialogue summarization
+
+preprocessing:
+  # Processing strategy name
+  strategy: "std"
+  
+  # Text cleaning options
+  normalize_whitespace: true
+  remove_extra_newlines: true
+  
+  # Tokenization settings
+  max_input_length: 512
+  max_target_length: 128
+  truncation: true
+  padding: "max_length"
+  
+  # Special tokens for dialogue
+  special_tokens:
+    - "<dialogue>"
+    - "</dialogue>"
+    - "<speaker1>"
+    - "<speaker2>"
+    - "<summary>"
+    - "</summary>"

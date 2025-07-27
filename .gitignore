@@ -94,3 +94,8 @@ setup_project.py
 # Context files for AI assistance
 # *_CONTEXT.md
 # *_HANDOVER.md
+
+=2.7.0
+debug_test.py
+memory_efficient_test.py
+simple_train_test.py

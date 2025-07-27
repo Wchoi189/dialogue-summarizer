@@ -60,6 +60,8 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         # Add special tokens if specified
         additional_tokens = tokenizer_cfg.get("additional_special_tokens", [])
         if additional_tokens:
+            # Ensure tokens are strings
+            additional_tokens = [str(token) for token in additional_tokens]
             special_tokens_dict = {"additional_special_tokens": additional_tokens}
             num_added = self.tokenizer.add_special_tokens(special_tokens_dict)
             ic(f"Added {num_added} special tokens: {additional_tokens}")

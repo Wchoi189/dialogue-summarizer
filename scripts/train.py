@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Training script for dialogue summarization using Fire CLI.
+Training script for dialogue summarization using Click CLI.
 Enhanced with comprehensive logging and experiment tracking.
 """
 
@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-import fire
+import click
 import pytorch_lightning as pl
 import torch
 from icecream import ic
@@ -17,7 +17,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     LearningRateMonitor,
     ModelCheckpoint,
-    RichProgressBar,
+    TQDMProgressBar,
 )
 from pytorch_lightning.loggers import TensorBoardLogger
 
@@ -48,7 +48,9 @@ class DialogueTrainer:
         overrides: Optional[List[str]] = None,
         resume_from: Optional[str] = None,
         fast_dev_run: bool = False,
-        **kwargs
+        max_epochs: Optional[int] = None,
+        batch_size: Optional[int] = None,
+        learning_rate: Optional[float] = None
     ) -> str:
         """
         Train dialogue summarization model.
@@ -56,10 +58,12 @@ class DialogueTrainer:
         Args:
             config_name: Name of config file (without .yaml)
             config_path: Custom path to config directory
-            overrides: List of config overrides (e.g., ["training.max_epochs=10"])
+            overrides: List of config overrides
             resume_from: Path to checkpoint to resume from
             fast_dev_run: Run one batch for debugging
-            **kwargs: Additional training arguments
+            max_epochs: Override max epochs
+            batch_size: Override batch size
+            learning_rate: Override learning rate
             
         Returns:
             Path to best model checkpoint
@@ -70,15 +74,18 @@ class DialogueTrainer:
         if config_path:
             self.config_manager = ConfigManager(config_path)
         
-        # Load configuration
+        # Build overrides from arguments
         overrides = overrides or []
         if fast_dev_run:
             overrides.append("training.fast_dev_run=true")
+        if max_epochs is not None:
+            overrides.append(f"training.max_epochs={max_epochs}")
+        if batch_size is not None:
+            overrides.append(f"dataset.batch_size={batch_size}")
+        if learning_rate is not None:
+            overrides.append(f"training.optimizer.lr={learning_rate}")
         
-        # Add kwargs as overrides
-        for key, value in kwargs.items():
-            overrides.append(f"{key}={value}")
-        
+        # Load configuration
         self.cfg = self.config_manager.load_config(
             config_name=config_name,
             overrides=overrides
@@ -103,6 +110,9 @@ class DialogueTrainer:
         # Setup model
         ic("Setting up model...")
         model = KoBARTSummarizationModel(self.cfg)
+        
+        # Ensure model is in training mode
+        model.train()
         
         # Log model info
         model_info = model.get_model_summary()
@@ -138,8 +148,7 @@ class DialogueTrainer:
         config_name: str = "config",
         checkpoint_path: str = None,
         config_path: Optional[str] = None,
-        overrides: Optional[List[str]] = None,
-        **kwargs
+        overrides: Optional[List[str]] = None
     ) -> dict:
         """
         Validate model on validation set.
@@ -149,7 +158,6 @@ class DialogueTrainer:
             checkpoint_path: Path to model checkpoint
             config_path: Custom config directory path
             overrides: Config overrides
-            **kwargs: Additional arguments
             
         Returns:
             Validation metrics
@@ -161,8 +169,6 @@ class DialogueTrainer:
             self.config_manager = ConfigManager(config_path)
         
         overrides = overrides or []
-        for key, value in kwargs.items():
-            overrides.append(f"{key}={value}")
         
         self.cfg = self.config_manager.load_config(
             config_name=config_name,
@@ -281,9 +287,10 @@ class DialogueTrainer:
         lr_monitor = LearningRateMonitor(logging_interval="step")
         callbacks.append(lr_monitor)
         
-        # Progress bar
-        progress_bar = RichProgressBar()
-        callbacks.append(progress_bar)
+        # Progress bar disabled to avoid hanging issues
+        # Uncomment the next two lines if you want to enable progress bar
+        # progress_bar = TQDMProgressBar()
+        # callbacks.append(progress_bar)
         
         # WandB callback
         if self.wandb_manager:
@@ -334,6 +341,9 @@ class DialogueTrainer:
             # Callbacks
             callbacks=callbacks,
             
+            # Progress bar enabled for better feedback
+            enable_progress_bar=True,
+            
             # Debugging
             fast_dev_run=fast_dev_run or training_cfg.fast_dev_run,
             overfit_batches=training_cfg.overfit_batches,
@@ -346,26 +356,75 @@ class DialogueTrainer:
             
             # Profiler
             profiler=training_cfg.profiler,
-            
-            # Resume
-            resume_from_checkpoint=resume_from,
         )
         
         ic("Trainer setup complete")
         return trainer
 
 
+@click.group()
+def cli():
+    """Dialogue Summarization Training CLI."""
+    pass
+
+
+@cli.command()
+@click.option('--config-name', default='config', help='Configuration name')
+@click.option('--config-path', type=click.Path(), help='Custom config directory')
+@click.option('--resume-from', type=click.Path(), help='Checkpoint to resume from')
+@click.option('--fast-dev-run', is_flag=True, help='Run one batch for debugging')
+@click.option('--max-epochs', type=int, help='Override max epochs')
+@click.option('--batch-size', type=int, help='Override batch size')
+@click.option('--learning-rate', type=float, help='Override learning rate')
+@click.option('--override', 'overrides', multiple=True, help='Config overrides (key=value)')
+def train(config_name, config_path, resume_from, fast_dev_run, max_epochs, batch_size, learning_rate, overrides):
+    """Train dialogue summarization model."""
+    trainer = DialogueTrainer()
+    
+    best_model_path = trainer.train(
+        config_name=config_name,
+        config_path=config_path,
+        overrides=list(overrides),
+        resume_from=resume_from,
+        fast_dev_run=fast_dev_run,
+        max_epochs=max_epochs,
+        batch_size=batch_size,
+        learning_rate=learning_rate
+    )
+    
+    click.echo(f"Training complete. Best model: {best_model_path}")
+
+
+@cli.command()
+@click.option('--config-name', default='config', help='Configuration name')
+@click.option('--checkpoint-path', type=click.Path(exists=True), help='Model checkpoint')
+@click.option('--config-path', type=click.Path(), help='Custom config directory')
+@click.option('--override', 'overrides', multiple=True, help='Config overrides')
+def validate(config_name, checkpoint_path, config_path, overrides):
+    """Validate model on validation set."""
+    trainer = DialogueTrainer()
+    
+    results = trainer.validate(
+        config_name=config_name,
+        checkpoint_path=checkpoint_path,
+        config_path=config_path,
+        overrides=list(overrides)
+    )
+    
+    click.echo("Validation Results:")
+    for key, value in results.items():
+        click.echo(f"  {key}: {value}")
+
+
 def main():
-    """Main entry point using Fire CLI."""
+    """Main entry point using Click CLI."""
     # Set environment variables for reproducibility
     os.environ["PYTHONHASHSEED"] = "0"
     
     # Enable faster PyTorch operations
     torch.backends.cudnn.benchmark = True
     
-    # Create trainer and use Fire for CLI
-    trainer = DialogueTrainer()
-    fire.Fire(trainer)
+    cli()
 
 
 if __name__ == "__main__":
