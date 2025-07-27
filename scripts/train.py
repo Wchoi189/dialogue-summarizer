@@ -130,11 +130,23 @@ class DialogueTrainer:
         )
         # Log final evaluation
         ic("Starting final evaluation on the best model...")
-        trainer.test(
+        # Capture the results from the test run
+        test_results = trainer.test(
             model=model,
-            datamodule=datamodule,
+            dataloaders=datamodule.val_dataloader(), # Use the validation dataloader
             ckpt_path="best"
         )
+
+        # DYNAMICALLY UPDATE THE RUN NAME
+        if self.wandb_manager and test_results:
+            # The result is a list of dictionaries, so we take the first one
+            final_metrics = test_results[0]
+            # Extract the final overall ROUGE F1-score
+            rouge_f_score = final_metrics.get("eval/rouge_f")
+            if rouge_f_score is not None:
+                ic(f"Updating WandB run name with final ROUGE score: {rouge_f_score:.4f}")
+                self.wandb_manager.update_run_name_with_submission_score(rouge_f_score)
+
         # Get best model path
         best_model_path = trainer.checkpoint_callback.best_model_path
         ic(f"Training completed. Best model: {best_model_path}")

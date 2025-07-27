@@ -2,10 +2,8 @@
 
 ## **Core Technology Stack**
 - **Framework**: PyTorch Lightning + Hydra
-- **Model**: KoBART for Korean dialogue summarization
+- **Model**: KoBART (`hyunwoongko/kobart`) for Korean dialogue summarization
 - **CLI**: Click for all scripts
-- **Debugging**: icecream (ic) for debug output
-- **Logging**: Rich + structured logging
 
 ## **Critical Design Decisions**
 1. **No Topic Dependency**: Model uses only `dialogue → summary`

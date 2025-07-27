@@ -324,20 +324,21 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
     def load_from_checkpoint(
         cls,
         checkpoint_path: str,
-        cfg: DictConfig,
-        map_location: Optional[str] = None
+        map_location: Optional[str] = None,
+        **kwargs
     ) -> "KoBARTSummarizationModel":
         """
         Load model from Lightning checkpoint.
         """
         ic(f"Loading model from checkpoint: {checkpoint_path}")
         
-        # ✅ FIX: Call super().load_from_checkpoint to avoid recursion
+        # The model's config (cfg) is loaded automatically from the 
+        # checkpoint's "hyper_parameters" section by the parent method.
         model = super().load_from_checkpoint(
             checkpoint_path,
-            cfg=cfg,
             map_location=map_location,
-            strict=False # Use strict=False to ignore mismatched weights if vocab was resized
+            strict=False, # Use strict=False to ignore mismatched weights if vocab was resized
+            **kwargs
         )
         
         ic("Model loaded from checkpoint successfully")

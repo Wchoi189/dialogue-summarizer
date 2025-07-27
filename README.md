@@ -4,42 +4,50 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
 
 ## 🚀 Quick Start
 
-1. **Environment Setup**
-   ```bash
-   micromamba env create -f environment.yml
-   micromamba activate dialogue-summarization
-   ```
+1.  **Create Environment**
+    ```bash
+    # Create a minimal environment with Python
+    micromamba env create -f environment.yml
+    micromamba activate dialogue-summarization
+    ```
 
-2. **Initialize Project**
-   ```bash
-   python scripts/setup_project.py
-   ```
+2.  **Install Dependencies**
+    ```bash
+    # Install PyTorch with CUDA support
+    pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cu121](https://download.pytorch.org/whl/cu121)
 
-3. **Train Model**
-   ```bash
-   python scripts/train.py
-   ```
+    # Install remaining packages
+    pip install -r requirements.txt
+    ```
 
-4. **Generate Predictions**
-   ```bash
-   python scripts/inference.py
-   ```
+3.  **Train Model**
+    ```bash
+    python scripts/train.py train --config-name config
+    ```
 
+4.  **Generate Predictions**
+    ```bash
+    python scripts/inference.py submission /path/to/best/model.ckpt
+    ```
+
+
+```markdown
 ## 📁 Project Structure
 
 ```
-dialogue_summarization/
-├── configs/          # Hydra configuration files
-├── src/             # Source code
-│   ├── data/        # Data processing
-│   ├── models/      # Model implementations  
-│   ├── training/    # Training logic
-│   ├── evaluation/  # Evaluation metrics
-│   ├── inference/   # Inference pipeline
-│   └── utils/       # Utilities
-├── scripts/         # Entry point scripts
-├── notebooks/       # Jupyter notebooks
-└── tests/          # Unit tests
+
+dialogue\_summarization/
+├── configs/          \# Hydra configuration files
+├── src/              \# Source code
+│   ├── data/         \# Data processing
+│   ├── models/       \# Model implementations
+│   ├── evaluation/   \# Evaluation metrics
+│   ├── inference/    \# Inference pipeline
+│   └── utils/        \# Utilities
+├── scripts/          \# Entry point scripts
+├── notebooks/        \# Jupyter notebooks
+└── tests/            \# Unit tests
+
 ```
 
 ## 🛠️ Configuration

@@ -2,7 +2,7 @@
 
 ## **Code Quality Rules**
 - **File Size**: Keep modules under 300 lines
-- **CLI Interface**: Use Fire for all scripts
+- **CLI Interface**: Use Click for all scripts
 - **Debug Output**: Use icecream (ic) instead of print
 - **Error Handling**: Comprehensive try/catch with logging
 - **Type Hints**: Use throughout for better code clarity

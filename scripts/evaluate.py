@@ -106,7 +106,6 @@ class DialogueEvaluationRunner:
         ic("Loading model from checkpoint...")
         model = KoBARTSummarizationModel.load_from_checkpoint(
             checkpoint_path,
-            cfg=self.cfg
         )
         
         # Setup trainer for evaluation
