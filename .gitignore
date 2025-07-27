@@ -45,7 +45,7 @@ venv.bak/
 *.pt
 *.bin
 *.safetensors
-models/
+/models/
 checkpoints/
 wandb/
 
