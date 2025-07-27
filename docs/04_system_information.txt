@@ -1,0 +1,33 @@
+System Information
+	• Host: instance-15339
+	• OS: Ubuntu 20.04.6 LTS (Focal Fossa)
+	• Kernel: 5.4.0-166-generic x86_64 (64-bit)
+Hardware
+Motherboard
+	• Model: ASRock TRX40 Creator
+	• BIOS: American Megatrends v: P1.70 (05/29/2020)
+CPU
+	• Model: AMD Ryzen Threadripper 3970X
+	• Architecture: 32-Core (4-Die)
+	• Type: Multi-Thread, Multi-Core, Multi-Chip Module
+	• L2 Cache: 16.0 MiB
+	• Speed: 
+		○ Base: 2200 MHz
+		○ Max: 3700 MHz
+		○ Current: 2071 MHz
+Memory
+	• Total: 251.62 GiB
+	• Used: 23.72 GiB (9.4%)
+Storage
+	• Total: 5.46 TiB
+	• Used: 124.96 GiB (2.2%)
+	• Drives: 
+		1. Samsung SSD 970 EVO Plus 2TB (NVMe): 1.82 TiB
+		2. HGST (Hitachi) HUS726T4TAL: 3.64 TiB
+Graphics
+	• 4x NVIDIA GPUs 
+		○ Driver version: 535.86.10 (all devices)
+-----
+GPU: NVIDIA GeForce RTX 3090 (24GB VRAM)
+CUDA Driver: 12.2 (latest)
+PyTorch: 2.1.0 with CUDA 11.8 support

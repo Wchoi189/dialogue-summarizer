@@ -1,0 +1,102 @@
+# @package training
+# Baseline training configuration matching original performance
+
+# Training strategy
+strategy: "auto"  # auto, ddp, ddp_spawn, etc.
+accelerator: "auto"  # auto, gpu, cpu
+devices: "auto"  # auto, [0], [0,1], etc.
+precision: "16-mixed"  # 16, 32, bf16-mixed, 16-mixed
+
+# Epochs and steps
+max_epochs: 20
+max_steps: -1  # Use max_epochs instead
+min_epochs: 1
+
+# Batch sizes
+batch_size: 50  # Per device train batch size (from baseline)
+eval_batch_size: 32  # Per device eval batch size
+accumulate_grad_batches: 1
+
+# Optimizer
+optimizer:
+  name: "adamw"
+  lr: 1.0e-5  # Learning rate from baseline
+  weight_decay: 0.01
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+# Learning rate scheduler
+lr_scheduler:
+  name: "cosine"
+  warmup_ratio: 0.1
+  warmup_steps: null  # Use warmup_ratio instead
+  max_lr: ${training.optimizer.lr}
+  min_lr: 1.0e-7
+
+# Validation and evaluation
+val_check_interval: 1.0  # Check every epoch
+check_val_every_n_epoch: 1
+evaluation_strategy: "epoch"
+predict_with_generate: true
+
+# Generation settings for validation
+generation:
+  max_length: 100
+  min_length: 1
+  num_beams: 4
+  no_repeat_ngram_size: 2
+  early_stopping: true
+  do_sample: false
+  length_penalty: 1.0
+
+# Model saving
+save_strategy: "epoch"
+save_total_limit: 5
+save_top_k: 3
+monitor: "val_rouge_f"
+mode: "max"
+save_on_train_epoch_end: false
+
+# Early stopping
+early_stopping:
+  enabled: true
+  monitor: "val_rouge_f"
+  patience: 3
+  min_delta: 0.001
+  mode: "max"
+  verbose: true
+
+# Gradient settings
+gradient_clip_val: 1.0
+gradient_clip_algorithm: "norm"
+
+# Logging
+log_every_n_steps: 50
+logging_strategy: "epoch"
+
+# Reproducibility
+deterministic: true
+benchmark: false
+
+# Memory optimization
+dataloader_num_workers: 4
+dataloader_pin_memory: true
+persistent_workers: true
+
+# Mixed precision
+amp_backend: "native"
+amp_level: "O1"
+
+# Debugging
+fast_dev_run: false
+overfit_batches: 0.0
+limit_train_batches: 1.0
+limit_val_batches: 1.0
+limit_test_batches: 1.0
+
+# Profiler
+profiler: null  # simple, advanced, pytorch, or null
+
+# Resume training
+resume_from_checkpoint: null
+auto_resume: false

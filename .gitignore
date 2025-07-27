@@ -1,0 +1,96 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.envrc
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Model artifacts
+*.pth
+*.pt
+*.bin
+*.safetensors
+models/
+checkpoints/
+wandb/
+
+# Data files (large datasets)
+# *.csv
+*.tsv
+*.json
+*.jsonl
+*.parquet
+
+!data/sample/
+!data/README.md
+
+# Outputs
+outputs/
+logs/
+results/
+predictions/
+*.log
+
+# Hydra
+.hydra/
+outputs/
+
+# WandB
+wandb/
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Data files
+data/*csv
+
+
+# Notebooks
+*.ipynb
+
+# Scripts
+setup_project.py
+
+# Context files for AI assistance
+# *_CONTEXT.md
+# *_HANDOVER.md

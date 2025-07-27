@@ -1,0 +1,71 @@
+# @package dataset
+# Dataset configuration for Korean dialogue summarization
+
+# Data paths - UPDATE THIS PATH
+data_path: "/home/wb2x/workspace/dialogue-summarizer/data"
+
+# File names
+files:
+  train: "train.csv"
+  dev: "dev.csv"
+  test: "test.csv"
+  submission_template: "sample_submission.csv"
+
+# Column mappings
+columns:
+  id: "fname"
+  input: "dialogue"
+  target: "summary"
+  topic: "topic"  # Available in train/dev only, used for analysis
+
+# Data processing
+preprocessing:
+  encoding: "utf-8"
+  max_input_length: 512
+  max_target_length: 100
+  truncation: true
+  padding: true
+  
+  # Korean text specific
+  normalize_whitespace: true
+  remove_extra_newlines: true
+  
+  # Special tokens (from baseline)
+  special_tokens:
+    - "#Person1#"
+    - "#Person2#"
+    - "#Person3#"
+    - "#PhoneNumber#"
+    - "#Address#"
+    - "#PassportNumber#"
+
+# Data splits (using provided train/dev split)
+use_provided_split: true
+train_split_ratio: null  # Not used when use_provided_split=true
+val_split_ratio: null
+
+# Data loading
+batch_size: 32
+shuffle_train: true
+shuffle_val: false
+drop_last: false
+
+# Submission format
+submission:
+  format: "indexed_csv"  # Matches sample_submission.csv
+  columns: ["fname", "summary"]
+  include_index: true
+  index_name: ""  # Unnamed index column
+
+# Data validation
+validate_files: true
+check_encoding: true
+sample_size_check: true
+
+# Statistics (will be computed during data loading)
+stats:
+  train_size: null
+  dev_size: null
+  test_size: null
+  avg_input_length: null
+  avg_target_length: null

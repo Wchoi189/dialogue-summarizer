@@ -1,0 +1,83 @@
+# @package model
+# Solar API model configuration
+
+name: "solar_api"
+architecture: "api"
+
+# API settings
+api:
+  base_url: "https://api.upstage.ai/v1/solar"
+  model_name: "solar-1-mini-chat"
+  api_key: null  # Set via environment variable UPSTAGE_API_KEY
+  
+  # Rate limiting
+  requests_per_minute: 100
+  requests_per_second: null
+  max_retries: 3
+  retry_delay: 1.0
+  
+  # Request parameters
+  temperature: 0.2
+  top_p: 0.3
+  max_tokens: 150
+  stream: false
+
+# Prompt engineering
+prompting:
+  system_prompt: "You are an expert in the field of dialogue summarization. Please summarize the following dialogue in a concise manner."
+  
+  # Few-shot examples
+  use_few_shot: true
+  num_examples: 1
+  example_selection: "random"  # random, similar, fixed
+  
+  # Prompt template
+  user_template: |
+    Following the instructions below, summarize the given dialogue.
+    Instructions:
+    1. Read the dialogue carefully.
+    2. Provide a concise summary that captures the essence of the conversation.
+    3. Focus on key topics, decisions, and outcomes.
+    
+    Dialogue:
+    {dialogue}
+    
+    Summary:
+
+  # Few-shot template
+  few_shot_template: |
+    Following the instructions below, summarize the given dialogue.
+    Instructions:
+    1. Read the provided sample dialogue and corresponding summary.
+    2. Read the dialogue carefully.
+    3. Following the sample's style, provide a concise summary of the given dialogue.
+    
+    Sample Dialogue:
+    {sample_dialogue}
+    
+    Sample Summary:
+    {sample_summary}
+    
+    Dialogue:
+    {dialogue}
+    
+    Summary:
+
+# Caching
+cache:
+  enabled: true
+  cache_dir: "cache/solar_api"
+  max_cache_size: 1000
+  cache_ttl: 86400  # 24 hours
+
+# Error handling
+error_handling:
+  max_errors: 10
+  skip_on_error: false
+  default_response: "요약을 생성할 수 없습니다."
+  
+# Logging
+logging:
+  log_requests: true
+  log_responses: false  # Don't log full responses (privacy)
+  log_errors: true

@@ -1,0 +1,92 @@
+# @package inference
+# Inference and text generation configuration
+
+# Model checkpoint
+checkpoint_path: null  # Path to trained model checkpoint
+model_name_or_path: "digit82/kobart-summarization"  # Fallback to pretrained
+
+# Batch processing
+batch_size: 32
+num_workers: 4
+pin_memory: true
+
+# Generation parameters (matching baseline)
+generation:
+  # Length control
+  max_length: 100
+  min_length: 1
+  max_new_tokens: null  # Use max_length instead
+  
+  # Beam search
+  num_beams: 4
+  num_beam_groups: 1
+  diversity_penalty: 0.0
+  
+  # Sampling
+  do_sample: false
+  temperature: 1.0
+  top_k: 50
+  top_p: 1.0
+  
+  # Repetition control
+  repetition_penalty: 1.0
+  no_repeat_ngram_size: 2
+  encoder_no_repeat_ngram_size: 0
+  
+  # Early stopping
+  early_stopping: true
+  length_penalty: 1.0
+  
+  # Special tokens
+  pad_token_id: null  # Will be set from tokenizer
+  bos_token_id: null
+  eos_token_id: null
+  
+  # Output control
+  output_attentions: false
+  output_hidden_states: false
+  output_scores: false
+  return_dict_in_generate: true
+
+# Post-processing
+post_processing:
+  # Token removal (matching baseline)
+  remove_tokens:
+    - "<usr>"
+    - "<s>"
+    - "</s>"
+    - "<pad>"
+    - "<unk>"
+  
+  # Text cleaning
+  strip_whitespace: true
+  normalize_whitespace: true
+  remove_empty_lines: true
+
+# Output settings
+output:
+  save_predictions: true
+  save_raw_outputs: false
+  save_generation_config: true
+  
+  # File formats
+  prediction_file: "predictions.csv"
+  submission_file: "submission.csv"
+  
+  # Include metadata
+  include_scores: false
+  include_input: false
+  include_generation_time: true
+
+# Hardware settings
+device: "auto"
+half_precision: false  # Use fp16 for inference
+compile_model: false
+
+# Progress tracking
+show_progress: true
+log_every_n_batches: 10
+
+# Error handling
+skip_errors: false
+max_errors: 10
