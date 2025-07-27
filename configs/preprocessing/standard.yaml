@@ -15,11 +15,11 @@ preprocessing:
   truncation: true
   padding: "max_length"
   
-  # Special tokens for dialogue
+  # ✅ CORRECTED: Special tokens matching the dataset format
   special_tokens:
-    - "<dialogue>"
-    - "</dialogue>"
-    - "<speaker1>"
-    - "<speaker2>"
-    - "<summary>"
-    - "</summary>"
+    - "#Person1#"
+    - "#Person2#"
+    - "#Person3#"
+    - "#PhoneNumber#"
+    - "#Address#"
+    - "#PassportNumber#"

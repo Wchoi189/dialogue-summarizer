@@ -329,21 +329,15 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
     ) -> "KoBARTSummarizationModel":
         """
         Load model from Lightning checkpoint.
-        
-        Args:
-            checkpoint_path: Path to checkpoint file
-            cfg: Configuration
-            map_location: Device to load checkpoint
-            
-        Returns:
-            Loaded model instance
         """
         ic(f"Loading model from checkpoint: {checkpoint_path}")
         
-        model = cls.load_from_checkpoint(
+        # ✅ FIX: Call super().load_from_checkpoint to avoid recursion
+        model = super().load_from_checkpoint(
             checkpoint_path,
             cfg=cfg,
-            map_location=map_location
+            map_location=map_location,
+            strict=False # Use strict=False to ignore mismatched weights if vocab was resized
         )
         
         ic("Model loaded from checkpoint successfully")

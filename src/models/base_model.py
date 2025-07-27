@@ -15,6 +15,7 @@ from omegaconf import DictConfig
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
 from transformers import get_cosine_schedule_with_warmup
+from evaluation.metrics import RougeCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,8 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         
         # Generation config
         self.generation_config = self._setup_generation_config()
-        
+       
+        self.rouge_calculator = RougeCalculator()
         ic(f"BaseSummarizationModel initialized")
     
     def clear_gpu_memory(self) -> None:
@@ -204,7 +206,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         target_texts = self._decode_targets(batch["labels"])
         
         step_output = {
-            "loss": loss,
+            "loss": loss.detach(),
             "predictions": pred_texts,
             "targets": target_texts,
             "sample_ids": batch["sample_ids"]
@@ -238,12 +240,21 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             all_targets.extend(output["targets"])
         
         # Calculate ROUGE scores
-        rouge_scores = self._calculate_rouge_scores(all_predictions, all_targets)
+        # rouge_scores = self._calculate_rouge_scores(all_predictions, all_targets)
         
+        # CENTRALIZED ROUGE CALCULATOR
+        rouge_scores = self.rouge_calculator.calculate_rouge(
+            predictions=all_predictions,
+            references=all_targets,
+            average=True
+        )
+
         # Log metrics
         self.log("val_loss", avg_loss, prog_bar=True)
-        for metric_name, score in rouge_scores.items():
-            self.log(f"val_{metric_name}", score, prog_bar=True)
+        # We get a dict like {'rouge1_f': 0.5, ...}, log each one
+        for key, value in rouge_scores.items():
+            if key.endswith('_f'): # Log only the F1 scores for brevity
+                self.log(f"val_{key}", value, prog_bar=True)
         
         # Store validation metrics
         self.validation_metrics = {
@@ -253,10 +264,10 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         
         ic(f"Validation metrics: {self.validation_metrics}")
         
-        # Clear outputs for next epoch (PyTorch Lightning v2.0+)
+        # Clear outputs for next epoch
         self.validation_step_outputs.clear()
         
-        # Clear GPU memory after validation epoch
+        # Clear GPU memory
         self.clear_gpu_memory()
         self.log_gpu_memory("Validation epoch end")
     
@@ -377,60 +388,60 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         
         return decoded
     
-    def _calculate_rouge_scores(
-        self,
-        predictions: List[str],
-        targets: List[str]
-    ) -> Dict[str, float]:
-        """
-        Calculate ROUGE scores.
+    # def _calculate_rouge_scores(
+    #     self,
+    #     predictions: List[str],
+    #     targets: List[str]
+    # ) -> Dict[str, float]:
+    #     """
+    #     Calculate ROUGE scores.
         
-        Args:
-            predictions: Predicted texts
-            targets: Target texts
+    #     Args:
+    #         predictions: Predicted texts
+    #         targets: Target texts
             
-        Returns:
-            Dictionary with ROUGE scores
-        """
-        try:
-            from rouge import Rouge
-            rouge = Rouge()
+    #     Returns:
+    #         Dictionary with ROUGE scores
+    #     """
+    #     try:
+    #         from rouge import Rouge
+    #         rouge = Rouge()
             
-            # Filter empty predictions/targets
-            valid_pairs = [
-                (pred, target) for pred, target in zip(predictions, targets)
-                if pred.strip() and target.strip()
-            ]
+    #         # Filter empty predictions/targets
+    #         valid_pairs = [
+    #             (pred, target) for pred, target in zip(predictions, targets)
+    #             if pred.strip() and target.strip()
+    #         ]
             
-            if not valid_pairs:
-                logger.warning("No valid prediction-target pairs for ROUGE calculation")
-                return {"rouge_1_f": 0.0, "rouge_2_f": 0.0, "rouge_l_f": 0.0, "rouge_f": 0.0}
+    #         if not valid_pairs:
+    #             logger.warning("No valid prediction-target pairs for ROUGE calculation")
+    #             return {"rouge_1_f": 0.0, "rouge_2_f": 0.0, "rouge_l_f": 0.0, "rouge_f": 0.0}
             
-            valid_preds, valid_targets = zip(*valid_pairs)
+    #         valid_preds, valid_targets = zip(*valid_pairs)
             
-            scores = rouge.get_scores(list(valid_preds), list(valid_targets), avg=True)
+    #         scores = rouge.get_scores(list(valid_preds), list(valid_targets), avg=True)
             
-            rouge_scores = {
-                "rouge_1_f": scores["rouge-1"]["f"],
-                "rouge_2_f": scores["rouge-2"]["f"],
-                "rouge_l_f": scores["rouge-l"]["f"],
-            }
+    #         rouge_scores = {
+    #             "rouge_1_f": scores["rouge-1"]["f"],
+    #             "rouge_2_f": scores["rouge-2"]["f"],
+    #             "rouge_l_f": scores["rouge-l"]["f"],
+    #         }
             
-            # Calculate average ROUGE F1
-            rouge_scores["rouge_f"] = (
-                rouge_scores["rouge_1_f"] + 
-                rouge_scores["rouge_2_f"] + 
-                rouge_scores["rouge_l_f"]
-            ) / 3
+    #         # Calculate average ROUGE F1
+    #         rouge_scores["rouge_f"] = (
+    #             rouge_scores["rouge_1_f"] + 
+    #             rouge_scores["rouge_2_f"] + 
+    #             rouge_scores["rouge_l_f"]
+    #         ) / 3
             
-            return rouge_scores
+    #         return rouge_scores
             
-        except ImportError:
-            logger.warning("Rouge package not available, returning zero scores")
-            return {"rouge_1_f": 0.0, "rouge_2_f": 0.0, "rouge_l_f": 0.0, "rouge_f": 0.0}
-        except Exception as e:
-            logger.error(f"Error calculating ROUGE scores: {e}")
-            return {"rouge_1_f": 0.0, "rouge_2_f": 0.0, "rouge_l_f": 0.0, "rouge_f": 0.0}
+    #     except ImportError:
+    #         logger.warning("Rouge package not available, returning zero scores")
+    #         return {"rouge_1_f": 0.0, "rouge_2_f": 0.0, "rouge_l_f": 0.0, "rouge_f": 0.0}
+    #     except Exception as e:
+    #         logger.error(f"Error calculating ROUGE scores: {e}")
+    #         return {"rouge_1_f": 0.0, "rouge_2_f": 0.0, "rouge_l_f": 0.0, "rouge_f": 0.0}
     
     def configure_optimizers(self) -> Dict[str, Any]:
         """Configure optimizers and learning rate schedulers."""

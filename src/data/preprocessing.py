@@ -184,63 +184,38 @@ class DialoguePreprocessor:
     ) -> Mapping[str, Any]:
         """
         Prepare model inputs from dialogue and summary.
-        
-        Args:
-            dialogue: Input dialogue text
-            summary: Target summary text (None for inference)
-            is_inference: Whether this is for inference
-            
-        Returns:
-            Dictionary with tokenized inputs
         """
         # Preprocess inputs
         dialogue = self.preprocess_dialogue(dialogue)
-        
-        # Tokenize dialogue (encoder input)
-        encoder_inputs = self.tokenize_text(
+        if summary is not None:
+            summary = self.preprocess_summary(summary)
+
+        # ✅ REFACTORED TOKENIZATION
+        # Let the tokenizer handle both dialogue and summary (as text_target)
+        model_inputs = self.tokenizer(
             dialogue,
+            text_target=summary,
             max_length=self.preprocessing_cfg.max_input_length,
-            truncation=self.preprocessing_cfg.truncation,
+            truncation=True, # Truncate dialogue if too long
             padding=self.preprocessing_cfg.padding,
             return_tensors="pt" if not is_inference else None
         )
-        
-        result = {
-            "input_ids": encoder_inputs["input_ids"],
-            "attention_mask": encoder_inputs["attention_mask"]
-        }
-        
-        # Add target if provided (for training/validation)
+
+        # For training/validation, truncate the labels separately
         if summary is not None:
-            summary = self.preprocess_summary(summary)
-            
-            # Decoder input (with BOS token)
-            decoder_input = f"{self.tokenizer.bos_token}{summary}"
-            decoder_inputs = self.tokenize_text(
-                decoder_input,
-                max_length=self.preprocessing_cfg.max_target_length,
-                truncation=self.preprocessing_cfg.truncation,
-                padding=self.preprocessing_cfg.padding,
-                return_tensors="pt" if not is_inference else None
-            )
-            
-            # Labels (with EOS token)
-            labels_text = f"{summary}{self.tokenizer.eos_token}"
-            labels = self.tokenize_text(
-                labels_text,
-                max_length=self.preprocessing_cfg.max_target_length,
-                truncation=self.preprocessing_cfg.truncation,
-                padding=self.preprocessing_cfg.padding,
-                return_tensors="pt" if not is_inference else None
-            )
-            
-            result.update({
-                "decoder_input_ids": decoder_inputs["input_ids"],
-                "decoder_attention_mask": decoder_inputs["attention_mask"],
-                "labels": labels["input_ids"]
-            })
-        
-        return result
+            with self.tokenizer.as_target_tokenizer():
+                labels = self.tokenizer(
+                    summary,
+                    max_length=self.preprocessing_cfg.max_target_length,
+                    truncation=True,
+                    padding=self.preprocessing_cfg.padding,
+                    return_tensors="pt" if not is_inference else None
+                )
+            model_inputs['labels'] = labels['input_ids']
+
+        # No need to manually create decoder_input_ids, the model handles it.
+        # The forward method of BartForConditionalGeneration creates them from labels.
+        return model_inputs
     
     def decode_outputs(
         self,

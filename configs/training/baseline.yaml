@@ -3,7 +3,7 @@
 
 # Training strategy
 strategy: "auto"  # auto, ddp, ddp_spawn, etc.
-accelerator: "gpu"  # GPU acceleration enabled
+accelerator: "auto" 
 devices: 1  # Single GPU device
 precision: "16-mixed"  # Mixed precision for faster training
 
