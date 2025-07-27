@@ -199,19 +199,13 @@ class ConfigManager:
     def get_config_summary(self, cfg: DictConfig) -> Dict[str, Any]:
         """
         Get a summary of key configuration parameters.
-        
-        Args:
-            cfg: Configuration to summarize
-            
-        Returns:
-            Dictionary with key parameters
         """
         summary = {
             "model_name": cfg.get("model", {}).get("name", "unknown"),
             "dataset_path": cfg.get("dataset", {}).get("data_path", "unknown"),
             "batch_size": cfg.get("training", {}).get("batch_size", "unknown"),
-            "learning_rate": cfg.get("training", {}).get("learning_rate", "unknown"),
-            "num_epochs": cfg.get("training", {}).get("num_epochs", "unknown"),
+            "learning_rate": cfg.get("training", {}).get("optimizer", {}).get("lr", "unknown"),
+            "max_epochs": cfg.get("training", {}).get("max_epochs", "unknown"),
         }
         
         return summary
