@@ -63,6 +63,6 @@ inference_mode:
 
 # Model compilation (PyTorch 2.0+)
 compile:
-  enabled: false  # Set to true for PyTorch 2.0+
-  mode: "default"  # default, reduce-overhead, max-autotune
+  enabled: true  # ✅ CHANGE from false
+  mode: "default"
   dynamic: false

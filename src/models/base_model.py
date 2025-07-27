@@ -48,7 +48,8 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         
         # Store validation outputs for epoch end processing (PyTorch Lightning v2.0+)
         self.validation_step_outputs = []
-        
+        self.test_step_outputs = []
+
         # Generation config
         self.generation_config = self._setup_generation_config()
        
@@ -99,12 +100,12 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         gen_cfg = self.training_cfg.get("generation", {})
         
         return {
-            "max_length": gen_cfg.get("max_length", 50),  # Reduced from 100
+            "max_length": gen_cfg.get("max_length", 50),
             "min_length": gen_cfg.get("min_length", 1),
-            "num_beams": 1,  # Greedy decoding instead of beam search
+            "num_beams": gen_cfg.get("num_beams", 4), # Change this from 1
             "no_repeat_ngram_size": gen_cfg.get("no_repeat_ngram_size", 2),
             "early_stopping": gen_cfg.get("early_stopping", True),
-            "do_sample": False,  # Greedy decoding
+            "do_sample": False,
             "length_penalty": gen_cfg.get("length_penalty", 1.0),
         }
     
@@ -159,7 +160,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         loss = outputs.loss
         
         # Log metrics
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         
         # Store metrics
         self.training_metrics["loss"] = loss.item()
@@ -220,8 +221,6 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
     def on_validation_epoch_end(self) -> None:
         """
         Process validation epoch end.
-        
-        Uses stored outputs from validation steps (PyTorch Lightning v2.0+ compatible).
         """
         outputs = self.validation_step_outputs
         
@@ -239,22 +238,19 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             all_predictions.extend(output["predictions"])
             all_targets.extend(output["targets"])
         
-        # Calculate ROUGE scores
-        # rouge_scores = self._calculate_rouge_scores(all_predictions, all_targets)
-        
-        # CENTRALIZED ROUGE CALCULATOR
+        # Use the centralized ROUGE calculator
         rouge_scores = self.rouge_calculator.calculate_rouge(
             predictions=all_predictions,
             references=all_targets,
             average=True
         )
-
-        # Log metrics
-        self.log("val_loss", avg_loss, prog_bar=True)
-        # We get a dict like {'rouge1_f': 0.5, ...}, log each one
-        for key, value in rouge_scores.items():
-            if key.endswith('_f'): # Log only the F1 scores for brevity
-                self.log(f"val_{key}", value, prog_bar=True)
+        
+        # Log all ROUGE metrics to WandB and progress bar
+        self.log("val/loss", avg_loss, prog_bar=True)
+        self.log_dict(
+            {f"val/{k}": v for k, v in rouge_scores.items()},
+            sync_dist=True
+        )
         
         # Store validation metrics
         self.validation_metrics = {
@@ -273,28 +269,31 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
     
     def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, Any]:
         """
-        Test step (same as validation but without targets).
-        
-        Args:
-            batch: Batch of data
-            batch_idx: Batch index
-            
-        Returns:
-            Dictionary with outputs
+        Test step.
         """
-        # Generate predictions
+        # Forward pass for loss calculation
+        outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
+        loss = outputs.loss
+        
+        # Generate predictions for evaluation
         predictions = self.generate(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"]
         )
         
-        # Decode predictions
+        # Decode predictions and targets
         pred_texts = self._decode_predictions(predictions)
+        target_texts = self._decode_targets(batch["labels"])
         
-        return {
+        step_output = {
+            "loss": loss.detach(),
             "predictions": pred_texts,
+            "targets": target_texts,
             "sample_ids": batch["sample_ids"]
         }
+        
+        self.test_step_outputs.append(step_output)
+        return step_output
     
     def predict_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, Any]:
         """
@@ -388,61 +387,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         
         return decoded
     
-    # def _calculate_rouge_scores(
-    #     self,
-    #     predictions: List[str],
-    #     targets: List[str]
-    # ) -> Dict[str, float]:
-    #     """
-    #     Calculate ROUGE scores.
-        
-    #     Args:
-    #         predictions: Predicted texts
-    #         targets: Target texts
-            
-    #     Returns:
-    #         Dictionary with ROUGE scores
-    #     """
-    #     try:
-    #         from rouge import Rouge
-    #         rouge = Rouge()
-            
-    #         # Filter empty predictions/targets
-    #         valid_pairs = [
-    #             (pred, target) for pred, target in zip(predictions, targets)
-    #             if pred.strip() and target.strip()
-    #         ]
-            
-    #         if not valid_pairs:
-    #             logger.warning("No valid prediction-target pairs for ROUGE calculation")
-    #             return {"rouge_1_f": 0.0, "rouge_2_f": 0.0, "rouge_l_f": 0.0, "rouge_f": 0.0}
-            
-    #         valid_preds, valid_targets = zip(*valid_pairs)
-            
-    #         scores = rouge.get_scores(list(valid_preds), list(valid_targets), avg=True)
-            
-    #         rouge_scores = {
-    #             "rouge_1_f": scores["rouge-1"]["f"],
-    #             "rouge_2_f": scores["rouge-2"]["f"],
-    #             "rouge_l_f": scores["rouge-l"]["f"],
-    #         }
-            
-    #         # Calculate average ROUGE F1
-    #         rouge_scores["rouge_f"] = (
-    #             rouge_scores["rouge_1_f"] + 
-    #             rouge_scores["rouge_2_f"] + 
-    #             rouge_scores["rouge_l_f"]
-    #         ) / 3
-            
-    #         return rouge_scores
-            
-    #     except ImportError:
-    #         logger.warning("Rouge package not available, returning zero scores")
-    #         return {"rouge_1_f": 0.0, "rouge_2_f": 0.0, "rouge_l_f": 0.0, "rouge_f": 0.0}
-    #     except Exception as e:
-    #         logger.error(f"Error calculating ROUGE scores: {e}")
-    #         return {"rouge_1_f": 0.0, "rouge_2_f": 0.0, "rouge_l_f": 0.0, "rouge_f": 0.0}
-    
+
     def configure_optimizers(self) -> Dict[str, Any]:
         """Configure optimizers and learning rate schedulers."""
         # Setup optimizer
@@ -503,3 +448,36 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             "trainable_ratio": trainable_params / total_params if total_params > 0 else 0,
             "model_size_mb": total_params * 4 / (1024 * 1024),  # Assuming fp32
         }
+    
+    def on_test_epoch_end(self) -> None:
+        """
+        Process test epoch end.
+        """
+        outputs = self.test_step_outputs
+        
+        if not outputs:
+            return
+
+        avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
+        
+        all_predictions = []
+        all_targets = []
+        for output in outputs:
+            all_predictions.extend(output["predictions"])
+            all_targets.extend(output["targets"])
+        
+        rouge_scores = self.rouge_calculator.calculate_rouge(
+            predictions=all_predictions,
+            references=all_targets,
+            average=True
+        )
+        
+         # Log all ROUGE metrics with an "eval_" prefix
+        self.log("eval/loss", avg_loss)
+        self.log_dict(
+            {f"eval/{k}": v for k, v in rouge_scores.items()},
+            sync_dist=True
+        )
+        
+        ic(f"Final Evaluation metrics: {rouge_scores}")
+        self.test_step_outputs.clear()   

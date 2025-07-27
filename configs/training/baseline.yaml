@@ -8,20 +8,20 @@ devices: 1  # Single GPU device
 precision: "16-mixed"  # Mixed precision for faster training
 
 # Epochs and steps
-max_epochs: 3  # Reduced for testing
+max_epochs: 20  # Reduced for testing
 max_steps: -1  # Use max_epochs instead
 min_epochs: 1
 
 # Batch sizes
-batch_size: 4  # Reduced for GPU memory efficiency (RTX 3090)
-eval_batch_size: 2  # Reduced for GPU memory efficiency
-accumulate_grad_batches: 8  # Maintain effective batch size of 32
+batch_size: 16  # ✅ INCREASE from 4
+eval_batch_size: 16 # ✅ INCREASE from 2
+accumulate_grad_batches: 2  # ✅ DECREASE from 8 (16 * 2 = 32)
 
 # Optimizer
 optimizer:
   name: "adamw"
   lr: 1.0e-5  # Learning rate from baseline
-  weight_decay: 0.01
+  weight_decay: 0.05
   betas: [0.9, 0.999]
   eps: 1.0e-8
 
@@ -53,14 +53,14 @@ generation:
 save_strategy: "epoch"
 save_total_limit: 5
 save_top_k: 3
-monitor: "val_rouge_f"
+monitor: "val/rouge_f"
 mode: "max"
 save_on_train_epoch_end: false
 
 # Early stopping
 early_stopping:
   enabled: true
-  monitor: "val_rouge_f"
+  monitor: "val/rouge_f"
   patience: 3
   min_delta: 0.001
   mode: "max"

@@ -128,7 +128,13 @@ class DialogueTrainer:
             datamodule=datamodule,
             ckpt_path=resume_from
         )
-        
+        # Log final evaluation
+        ic("Starting final evaluation on the best model...")
+        trainer.test(
+            model=model,
+            datamodule=datamodule,
+            ckpt_path="best"
+        )
         # Get best model path
         best_model_path = trainer.checkpoint_callback.best_model_path
         ic(f"Training completed. Best model: {best_model_path}")
@@ -420,7 +426,10 @@ def main():
     """Main entry point using Click CLI."""
     # Set environment variables for reproducibility
     os.environ["PYTHONHASHSEED"] = "0"
-    
+
+    # ADD THIS LINE to optimize for Tensor Cores
+    torch.set_float32_matmul_precision('medium')    
+
     # Enable faster PyTorch operations
     torch.backends.cudnn.benchmark = True
     
