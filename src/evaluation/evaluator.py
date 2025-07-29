@@ -167,10 +167,10 @@ class DialogueEvaluator:
         ]
         
         return {
-            "avg_pred_length": np.mean(pred_lengths),
-            "avg_ref_length": np.mean(ref_lengths),
-            "avg_length_ratio": np.mean(length_ratios),
-            "length_ratio_std": np.std(length_ratios)
+            "avg_pred_length": float(np.mean(pred_lengths)),
+            "avg_ref_length": float(np.mean(ref_lengths)),
+            "avg_length_ratio": float(np.mean(length_ratios)),
+            "length_ratio_std": float(np.std(length_ratios))
         }
     
     def _calculate_quality_metrics(
@@ -223,12 +223,12 @@ class DialogueEvaluator:
         length_ratios = [s["length_ratio"] for s in sample_analysis]
         
         return {
-            "rouge1_std": np.std(rouge1_scores),
-            "rouge2_std": np.std(rouge2_scores),
-            "rougeL_std": np.std(rougeL_scores),
-            "rouge1_min": np.min(rouge1_scores),
-            "rouge1_max": np.max(rouge1_scores),
-            "length_ratio_median": np.median(length_ratios),
+            "rouge1_std": float(np.std(rouge1_scores)),
+            "rouge2_std": float(np.std(rouge2_scores)),
+            "rougeL_std": float(np.std(rougeL_scores)),
+            "rouge1_min": float(np.min(rouge1_scores)),
+            "rouge1_max": float(np.max(rouge1_scores)),
+            "length_ratio_median": float(np.median(length_ratios)),
             "num_samples": len(sample_analysis)
         }
     

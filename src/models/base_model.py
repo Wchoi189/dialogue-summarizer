@@ -17,7 +17,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
 from transformers import get_cosine_schedule_with_warmup
 from evaluation.metrics import RougeCalculator
 import wandb
-
+from pytorch_lightning.loggers import WandbLogger
 
 logger = logging.getLogger(__name__)
 
@@ -166,10 +166,12 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         Returns:
             Loss tensor
         """
-        # Log memory before step
-        if batch_idx % 50 == 0:  # Log every 50 steps
-            self.log_gpu_memory(f"Training step {batch_idx} start")
-        
+        # # Log memory before step
+        # if batch_idx % 50 == 0:  # Log every 50 steps
+        #     self.log_gpu_memory(f"Training step {batch_idx} start")
+        # Log only on the first step of the entire training run
+        if self.global_step == 0:
+             self.log_gpu_memory(f"Training step {batch_idx} start")
         outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
         loss = outputs["loss"]
         
@@ -196,8 +198,8 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         Returns:
             Dictionary with outputs
         """
-        # Log memory before step
-        if batch_idx % 10 == 0:  # Log every 10 validation steps
+        
+        if batch_idx == 0:
             self.log_gpu_memory(f"Validation step {batch_idx} start")
         
         # Forward pass for loss calculation
@@ -298,17 +300,27 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
 
             table.add_data(self.current_epoch, input_text, target_text, pred_text, f"{rouge1_f:.4f}")
         
-        if isinstance(self.logger, WandbLogger):
-            # Access the underlying wandb run object via .experiment
-            wandb_logger = self.logger.experiment
+        wandb_run = None
+        # A. Check if the logger is a collection of multiple loggers (list or tuple)
+        if hasattr(self.logger, '__iter__') and not isinstance(self.logger, WandbLogger):
+            for logger in self.logger:
+                if isinstance(logger, WandbLogger):
+                    # If we find the WandbLogger, get its experiment object and stop searching
+                    wandb_run = logger.experiment
+                    break
+        # B. Check if it's a single WandbLogger instance
+        elif isinstance(self.logger, WandbLogger):
+            wandb_run = self.logger.experiment
 
-            # Log the table using a dictionary
-            wandb_logger.log({
-                "validation_samples": table
-            })
+        # C. Log the table if the wandb run object was successfully found
+        if wandb_run:
+            try:
+                wandb_run.log({"validation_samples": table})
+            except Exception as e:
+                ic(f"Failed to log WandB table: {e}")
         else:
-            ic("WandB logger not found, skipping table logging.")
-
+            # This message will now only appear if there is truly no WandB logger
+            ic("WandB logger not found in trainer, skipping table logging.")
         # Store metrics and clear outputs
         self.validation_metrics = {"loss": avg_loss.item(), **rouge_scores}
         ic(f"Validation metrics: {self.validation_metrics}")

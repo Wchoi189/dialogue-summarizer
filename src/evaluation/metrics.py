@@ -290,7 +290,7 @@ class MultiReferenceRougeCalculator(RougeCalculator):
         if len(predictions) != len(references):
             raise ValueError(f"Length mismatch: {len(predictions)} predictions vs {len(references)} references")
         
-        all_scores = {
+        all_scores: Dict[str, List[float]] = {
             'rouge1_f': [],
             'rouge2_f': [],
             'rougeL_f': []
@@ -298,14 +298,18 @@ class MultiReferenceRougeCalculator(RougeCalculator):
         
         for pred, refs in zip(predictions, references):
             # Calculate ROUGE against each reference and take the maximum
-            best_scores = {'rouge1_f': 0, 'rouge2_f': 0, 'rougeL_f': 0}
+            best_scores = {'rouge1_f': 0.0, 'rouge2_f': 0.0, 'rougeL_f': 0.0}
             
             for ref in refs:
                 scores = self.calculate_rouge([pred], [ref], average=True)
                 
                 for metric in ['rouge1_f', 'rouge2_f', 'rougeL_f']:
-                    if scores[metric] > best_scores[metric]:
-                        best_scores[metric] = scores[metric]
+                    score_value = scores[metric]
+                    # Ensure we're working with float values
+                    if isinstance(score_value, list):
+                        score_value = score_value[0] if score_value else 0.0
+                    if score_value > best_scores[metric]:
+                        best_scores[metric] = score_value
             
             # Add best scores to overall collection
             for metric in ['rouge1_f', 'rouge2_f', 'rougeL_f']:
@@ -350,10 +354,16 @@ def calculate_rouge_scores(
     # Check if we have multiple references
     if isinstance(references[0], list):
         calculator = MultiReferenceRougeCalculator(use_stemmer=use_stemmer)
-        return calculator.calculate_rouge_multi_ref(predictions, references, average)
+        # Type cast to satisfy type checker
+        from typing import cast
+        multi_references = cast(List[List[str]], references)
+        return calculator.calculate_rouge_multi_ref(predictions, multi_references, average)
     else:
         calculator = RougeCalculator(use_stemmer=use_stemmer)
-        return calculator.calculate_rouge(predictions, references, average)
+        # Type cast to satisfy type checker
+        from typing import cast
+        single_references = cast(List[str], references)
+        return calculator.calculate_rouge(predictions, single_references, average)
 
 
 def format_rouge_results(scores: Dict[str, float], precision: int = 4) -> str:

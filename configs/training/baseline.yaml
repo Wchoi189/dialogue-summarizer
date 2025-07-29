@@ -21,7 +21,7 @@ accumulate_grad_batches: 2
 # Optimizer
 optimizer:
   name: "adamw"
-  lr: 3.0e-5
+  lr: 5e-5 # A slightly higher starting point can also work, but monitor it
   weight_decay: 0.05
   betas: [0.9, 0.999]
   eps: 1.0e-8
@@ -42,13 +42,13 @@ predict_with_generate: true
 
 # Generation settings for validation
 generation:
-  max_length: 128
-  min_length: 10
-  num_beams: 5
+  max_length: 64  # 추천: 128 -> 64
+  min_length: 15  # 추천: 10 -> 15
+  num_beams: 4
   no_repeat_ngram_size: 2
   early_stopping: true
   do_sample: false
-  length_penalty: 2.0
+  length_penalty: 1.0
 
 # Model saving
 save_strategy: "epoch"
@@ -62,7 +62,7 @@ save_on_train_epoch_end: false
 early_stopping:
   enabled: true
   monitor: "val/rouge_f"
-  patience: 5
+  patience: 3
   min_delta: 0.001
   mode: "max"
   verbose: true
@@ -72,8 +72,8 @@ gradient_clip_val: 1.0
 gradient_clip_algorithm: "norm"
 
 # Logging
-log_every_n_steps: 50
-logging_strategy: "epoch"
+log_every_n_steps: 50 # LOG SPAM
+# logging_strategy: "epoch"
 
 # Memory optimization
 dataloader_num_workers: 16  # 🚀 CHANGED: Increased based on your 32-core CPU to speed up data loading

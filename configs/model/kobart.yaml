@@ -52,7 +52,7 @@ tie_word_embeddings: true
 
 # Model specific settings for training
 training_mode:
-  gradient_checkpointing: false
+  gradient_checkpointing: true
   use_cache: false  # Disable during training
   
 # Model specific settings for inference

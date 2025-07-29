@@ -8,10 +8,11 @@ import os
 import sys
 from pathlib import Path
 from typing import List, Optional
-
 import click
 import pytorch_lightning as pl
 import torch
+import logging
+
 from icecream import ic
 from pytorch_lightning.callbacks import (
     EarlyStopping,
@@ -23,7 +24,8 @@ from pytorch_lightning.loggers import TensorBoardLogger
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
+# Suppress the specific, repetitive "use_cache" warning
+logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
 from data.datamodule import DialogueDataModule
 from models.kobart_model import KoBARTSummarizationModel
 from utils.config_utils import ConfigManager
@@ -359,7 +361,7 @@ class DialogueTrainer:
             check_val_every_n_epoch=training_cfg.check_val_every_n_epoch,
             
             # Logging
-            log_every_n_steps=training_cfg.log_every_n_steps,
+            log_every_n_steps=training_cfg.get('log_every_n_steps', 50),
             logger=loggers,
             
             # Callbacks
