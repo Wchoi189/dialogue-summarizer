@@ -43,10 +43,6 @@ device: "auto"  # auto, cpu, cuda, cuda:0, etc.
 num_workers: 4
 pin_memory: true
 
-# Reproducibility
-deterministic: true
-benchmark: false
-
 # Hydra settings
 hydra:
   run:

@@ -374,12 +374,12 @@ class DialogueTrainer:
             limit_train_batches=training_cfg.limit_train_batches,
             limit_val_batches=training_cfg.limit_val_batches,
             
-            # Reproducibility
-            deterministic=training_cfg.deterministic,
-            benchmark=training_cfg.benchmark,
+            # Reproducibility - use get() with defaults for missing keys
+            deterministic=training_cfg.get("deterministic", False),
+            benchmark=training_cfg.get("benchmark", True),
             
-            # Profiler
-            profiler=training_cfg.profiler,
+            # Profiler - use get() with default for missing key
+            profiler=training_cfg.get("profiler", None),
         )
         
         ic("Trainer setup complete")

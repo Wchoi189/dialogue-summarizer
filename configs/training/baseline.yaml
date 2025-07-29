@@ -92,7 +92,11 @@ limit_val_batches: 1.0
 limit_test_batches: 1.0
 
 # Profiler
-profiler: null
+profiler: null  # Options: null, "simple", "advanced", "pytorch"
+
+# Reproducibility settings
+deterministic: false  # Set to true for full reproducibility (may slow training)
+benchmark: true       # Set to false if input sizes vary significantly
 
 # Resume training
 resume_from_checkpoint: null
