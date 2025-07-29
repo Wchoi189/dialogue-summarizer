@@ -5,6 +5,7 @@ Enhanced integration with PyTorch Lightning and Hydra configuration.
 
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -111,9 +112,16 @@ class WandBManager:
         # Convert Hydra config to plain dict for WandB
         config_dict = OmegaConf.to_container(self.cfg, resolve=True)
         
+        # Ensure config_dict is a dictionary with string keys
+        if not isinstance(config_dict, dict):
+            config_dict = {}
+        
+        # Convert all keys to strings to ensure type consistency
+        config_dict = {str(k): v for k, v in config_dict.items()}
+        
         # Add system information
         config_dict["system"] = {
-            "python_version": f"{os.sys.version_info.major}.{os.sys.version_info.minor}.{os.sys.version_info.micro}",
+            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
             "working_directory": str(Path.cwd()),
         }
         

@@ -170,12 +170,12 @@ class ConfigManager:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         if resolve:
-            cfg = OmegaConf.to_yaml(cfg, resolve=True)
+            yaml_content = OmegaConf.to_yaml(cfg, resolve=True)
         else:
-            cfg = OmegaConf.to_yaml(cfg)
+            yaml_content = OmegaConf.to_yaml(cfg)
         
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write(cfg)
+            f.write(yaml_content)
         
         logger.info(f"Configuration saved to: {output_path}")
     
@@ -194,7 +194,8 @@ class ConfigManager:
         Returns:
             Merged configuration
         """
-        return OmegaConf.merge(base_cfg, override_cfg)
+        merged = OmegaConf.merge(base_cfg, override_cfg)
+        return DictConfig(merged)
     
     def get_config_summary(self, cfg: DictConfig) -> Dict[str, Any]:
         """

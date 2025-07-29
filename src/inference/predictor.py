@@ -5,7 +5,7 @@ Handles model loading, prediction generation, and output processing.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 import torch
@@ -63,7 +63,7 @@ class DialoguePredictor:
         
         ic(f"DialoguePredictor initialized on {self.device}")
     
-    def _setup_generation_config(self) -> Dict[str, any]:
+    def _setup_generation_config(self) -> Dict[str, Any]:
         """Setup generation configuration from inference config."""
         gen_cfg = self.inference_cfg.generation
         
@@ -152,6 +152,10 @@ class DialoguePredictor:
         if batch_size is None:
             batch_size = self.inference_cfg.batch_size
         
+        # Ensure batch_size is not None
+        if batch_size is None:
+            batch_size = 1
+        
         summaries = []
         
         # Process in batches
@@ -181,7 +185,7 @@ class DialoguePredictor:
         input_ids = torch.nn.utils.rnn.pad_sequence(
             [torch.tensor(ids) for ids in batch_inputs["input_ids"]],
             batch_first=True,
-            padding_value=self.preprocessor.tokenizer.pad_token_id
+            padding_value=self.preprocessor.tokenizer.pad_token_id or 0
         ).to(self.device)
         
         attention_mask = torch.nn.utils.rnn.pad_sequence(

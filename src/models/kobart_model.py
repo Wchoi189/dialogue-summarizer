@@ -4,7 +4,8 @@ Based on BART architecture with Korean language support.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, Optional, Union
 
 import torch
 from icecream import ic
@@ -33,6 +34,10 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         
         # Setup model
         self._setup_model()
+        
+        # Add assertions to ensure components are initialized
+        assert self.model is not None, "Model not initialized"
+        assert self.tokenizer is not None, "Tokenizer not initialized"
         
         # Resize token embeddings if special tokens were added
         if hasattr(self.tokenizer, 'vocab_size'):
@@ -114,22 +119,24 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         training_mode = self.model_cfg.get("training_mode", {})
         
         # Gradient checkpointing
-        if training_mode.get("gradient_checkpointing", False):
+        if training_mode.get("gradient_checkpointing", False) and self.model is not None:
             self.model.gradient_checkpointing_enable()
             ic("Gradient checkpointing enabled")
         
         # Cache usage
-        self.model.config.use_cache = training_mode.get("use_cache", False)
+        if self.model is not None:
+            self.model.config.use_cache = training_mode.get("use_cache", False)
         
         # Model compilation (PyTorch 2.0+)
         compile_cfg = self.model_cfg.get("compile", {})
         if compile_cfg.get("enabled", False):
             try:
+                # MODIFIED: Add a # type: ignore comment to suppress the linter error
                 self.model = torch.compile(
                     self.model,
                     mode=compile_cfg.get("mode", "default"),
                     dynamic=compile_cfg.get("dynamic", False)
-                )
+                )  # type: ignore
                 ic("Model compiled successfully")
             except Exception as e:
                 logger.warning(f"Model compilation failed: {e}")
@@ -143,6 +150,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         labels: Optional[torch.Tensor] = None,
         **kwargs
     ) -> Dict[str, torch.Tensor]:
+        
         """
         Forward pass through KoBART model.
         
@@ -157,6 +165,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         Returns:
             Model outputs including loss and logits
         """
+        assert self.model is not None
         return self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -188,6 +197,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         """
         # Set model to inference mode
         inference_mode = self.model_cfg.get("inference_mode", {})
+        assert self.model is not None, "Model not initialized"
         self.model.config.use_cache = inference_mode.get("use_cache", True)
         
         # Merge generation config with kwargs
@@ -200,6 +210,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
             "eos_token_id": self.tokenizer.eos_token_id,
         })
         
+        assert self.model is not None, "Model not initialized"
         with torch.no_grad():
             outputs = self.model.generate(
                 input_ids=input_ids,
@@ -231,32 +242,32 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
     
     def freeze_encoder(self) -> None:
         """Freeze encoder parameters for fine-tuning."""
+        assert self.model is not None, "Model not initialized"
         for param in self.model.model.encoder.parameters():
             param.requires_grad = False
         
         ic("Encoder parameters frozen")
-    
     def unfreeze_encoder(self) -> None:
         """Unfreeze encoder parameters."""
+        assert self.model is not None, "Model not initialized"
         for param in self.model.model.encoder.parameters():
             param.requires_grad = True
         
         ic("Encoder parameters unfrozen")
-    
     def freeze_decoder(self) -> None:
         """Freeze decoder parameters for fine-tuning."""
+        assert self.model is not None, "Model not initialized"
         for param in self.model.model.decoder.parameters():
             param.requires_grad = False
         
         ic("Decoder parameters frozen")
-    
     def unfreeze_decoder(self) -> None:
         """Unfreeze decoder parameters."""
+        assert self.model is not None, "Model not initialized"
         for param in self.model.model.decoder.parameters():
             param.requires_grad = True
         
         ic("Decoder parameters unfrozen")
-    
     def get_encoder_embeddings(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """
         Get encoder embeddings for analysis.
@@ -268,6 +279,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         Returns:
             Encoder hidden states
         """
+        assert self.model is not None, "Model not initialized"
         with torch.no_grad():
             encoder_outputs = self.model.model.encoder(
                 input_ids=input_ids,
@@ -301,11 +313,10 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
                 labels=labels
             )
             
-            loss = outputs.loss
-            perplexity = torch.exp(loss)
+            loss = outputs["loss"]
+            perplexity = torch.exp(loss).item()
+            return perplexity
             
-        return perplexity.item()
-    
     def save_pretrained(self, save_directory: str) -> None:
         """
         Save model and tokenizer.
@@ -315,6 +326,13 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         """
         ic(f"Saving model to: {save_directory}")
         
+        assert self.model is not None, "Model not initialized"
+        assert self.tokenizer is not None, "Tokenizer not initialized"
+        self.model.save_pretrained(save_directory)
+        self.tokenizer.save_pretrained(save_directory)
+        
+        ic("Model and tokenizer saved successfully")
+        
         self.model.save_pretrained(save_directory)
         self.tokenizer.save_pretrained(save_directory)
         
@@ -323,25 +341,49 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
     @classmethod
     def load_from_checkpoint(
         cls,
-        checkpoint_path: str,
-        map_location: Optional[str] = None,
-        **kwargs
+        checkpoint_path: Any,
+        map_location: Any = None,
+        hparams_file: Optional[Union[str, Path]] = None,
+        strict: Optional[bool] = True,
+        **kwargs,
     ) -> "KoBARTSummarizationModel":
         """
-        Load model from Lightning checkpoint.
+        Load model from a PyTorch Lightning checkpoint, with an option to override
+        the configuration for inference.
         """
         ic(f"Loading model from checkpoint: {checkpoint_path}")
-        
-        # The model's config (cfg) is loaded automatically from the 
-        # checkpoint's "hyper_parameters" section by the parent method.
+
+        # Extract the complete 'cfg' object if it was passed. This is the new config
+        # we want to use for the current task (e.g., inference).
+        new_cfg = kwargs.pop('cfg', None)
+
+        # Let the parent method load the model. It will use the hyperparameters
+        # saved within the checkpoint file to initialize the model.
+        # Any remaining `kwargs` will be used to override individual hparams.
         model = super().load_from_checkpoint(
             checkpoint_path,
             map_location=map_location,
-            strict=False, # Use strict=False to ignore mismatched weights if vocab was resized
+            hparams_file=hparams_file,
+            strict=strict,
             **kwargs
         )
-        
-        ic("Model loaded from checkpoint successfully")
+        ic("Model instance created from checkpoint using its saved hyperparameters.")
+
+        # If a new config (`new_cfg`) was provided, we manually update the
+        # configuration of the loaded model. This is crucial for inference,
+        # where we might use different settings (e.g., for generation).
+        if new_cfg:
+            ic("A new configuration was provided. Overriding the model's loaded config.")
+            model.cfg = new_cfg
+            model.model_cfg = new_cfg.model
+            model.training_cfg = new_cfg.training
+            
+            # Re-initialize parts of the model that depend on the new configuration.
+            # For inference, the generation config is especially important.
+            model.generation_config = model._setup_generation_config()
+            ic("Model configuration updated for the current task.")
+
+        ic("Model loaded from checkpoint successfully and is ready.")
         return model
 
 

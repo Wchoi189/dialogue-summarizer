@@ -6,7 +6,7 @@ Provides common functionality for training, validation, and testing.
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Union
-
+from pytorch_lightning.loggers import WandbLogger
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -16,6 +16,8 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
 from transformers import get_cosine_schedule_with_warmup
 from evaluation.metrics import RougeCalculator
+import wandb
+
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +28,6 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
     def __init__(self, cfg: DictConfig):
         """
         Initialize base model.
-        
-        Args:
-            cfg: Complete configuration
         """
         super().__init__()
         self.cfg = cfg
@@ -38,9 +37,15 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         # Save hyperparameters
         self.save_hyperparameters(cfg)
         
-        # Model will be initialized by subclasses
-        self.model = None
+        # MODIFIED: Provide a clear type hint for self.model
+        self.model: Optional[torch.nn.Module] = None
         self.tokenizer = None
+
+        # Ensure model and tokenizer are set up if subclass implements setup methods
+        if hasattr(self, "_setup_model"):
+            self._setup_model()
+        if hasattr(self, "_setup_tokenizer"):
+            self._setup_tokenizer()
         
         # Metrics storage
         self.training_metrics = {}
@@ -99,12 +104,19 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         """Setup generation configuration."""
         gen_cfg = self.training_cfg.get("generation", {})
         
+        num_beams = gen_cfg.get("num_beams", 4)
+        early_stopping = gen_cfg.get("early_stopping", True)
+        
+        # Fix beam search configuration: if num_beams=1, disable early_stopping
+        if num_beams == 1:
+            early_stopping = False
+        
         return {
             "max_length": gen_cfg.get("max_length", 50),
             "min_length": gen_cfg.get("min_length", 1),
-            "num_beams": gen_cfg.get("num_beams", 4), # Change this from 1
+            "num_beams": num_beams,
             "no_repeat_ngram_size": gen_cfg.get("no_repeat_ngram_size", 2),
-            "early_stopping": gen_cfg.get("early_stopping", True),
+            "early_stopping": early_stopping,
             "do_sample": False,
             "length_penalty": gen_cfg.get("length_penalty", 1.0),
         }
@@ -117,7 +129,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         decoder_attention_mask: Optional[torch.Tensor] = None,
         labels: Optional[torch.Tensor] = None,
         **kwargs
-    ) -> Dict[str, torch.Tensor]:
+    ) -> Any:
         """
         Forward pass through the model.
         
@@ -132,6 +144,8 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         Returns:
             Model outputs
         """
+        if self.model is None:
+            raise RuntimeError("Model is not initialized. Make sure the subclass sets up 'self.model' in _setup_model().")
         return self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -157,7 +171,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             self.log_gpu_memory(f"Training step {batch_idx} start")
         
         outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
-        loss = outputs.loss
+        loss = outputs["loss"]
         
         # Log metrics
         self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
@@ -188,7 +202,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         
         # Forward pass for loss calculation
         outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
-        loss = outputs.loss
+        loss = outputs["loss"]
         
         # Clear memory after forward pass
         self.clear_gpu_memory()
@@ -205,11 +219,23 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         # Decode predictions and targets
         pred_texts = self._decode_predictions(predictions)
         target_texts = self._decode_targets(batch["labels"])
+        input_texts = self._decode_inputs(batch["input_ids"])
+        
+        # DEBUG: Log sample predictions to help debug ROUGE issues
+        if batch_idx == 0:  # Only log first batch to avoid spam
+            ic(f"Input shape: {batch['input_ids'].shape}")
+            ic(f"Predictions shape: {predictions.shape}")
+            ic(f"Sample input: {input_texts[0][:200]}...")
+            ic(f"Sample target: {target_texts[0][:200]}...")
+            ic(f"Sample prediction: {pred_texts[0][:200]}...")
+            ic(f"Prediction length: {len(pred_texts[0])}")
+            ic(f"Target length: {len(target_texts[0])}")
         
         step_output = {
             "loss": loss.detach(),
             "predictions": pred_texts,
             "targets": target_texts,
+            "inputs": input_texts,
             "sample_ids": batch["sample_ids"]
         }
         
@@ -220,50 +246,73 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
     
     def on_validation_epoch_end(self) -> None:
         """
-        Process validation epoch end.
+        Process validation epoch end and log a table of predictions to WandB.
         """
         outputs = self.validation_step_outputs
-        
         if not outputs:
             return
+
         
-        # Calculate average loss
+        assert self.model is not None  # Ensure model is initialized
         avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
         
-        # Collect all predictions and targets
-        all_predictions = []
-        all_targets = []
-        
+        all_predictions, all_targets, all_inputs = [], [], []
         for output in outputs:
             all_predictions.extend(output["predictions"])
             all_targets.extend(output["targets"])
-        
-        # Use the centralized ROUGE calculator
+            all_inputs.extend(output["inputs"])
+
+        # Calculate overall ROUGE scores
         rouge_scores = self.rouge_calculator.calculate_rouge(
             predictions=all_predictions,
             references=all_targets,
             average=True
         )
         
-        # Log all ROUGE metrics to WandB and progress bar
+        # DEBUG: Log sample texts to debug ROUGE issues
+        ic(f"Total predictions: {len(all_predictions)}")
+        ic(f"Total targets: {len(all_targets)}")
+        if all_predictions and all_targets:
+            ic(f"First prediction: '{all_predictions[0]}'")
+            ic(f"First target: '{all_targets[0]}'")
+            ic(f"Prediction empty?: {all_predictions[0] == ''}")
+            ic(f"Target empty?: {all_targets[0] == ''}")
+        
+        # Log metrics to WandB
         self.log("val/loss", avg_loss, prog_bar=True)
-        self.log_dict(
-            {f"val/{k}": v for k, v in rouge_scores.items()},
-            sync_dist=True
-        )
+        self.log_dict({f"val/{k}": v for k, v in rouge_scores.items()}, sync_dist=True)  # type: ignore
+
+        # ✅ CREATE AND LOG A WANDB TABLE WITH SAMPLE PREDICTIONS
+        # Create a table with columns: Epoch, Input, Ground Truth, Prediction, ROUGE-1
+        table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1"])
         
-        # Store validation metrics
-        self.validation_metrics = {
-            "loss": avg_loss.item(),
-            **rouge_scores
-        }
+        # Take a sample of 8 from the validation set to log
+        for i in range(min(len(all_predictions), 8)):
+            input_text = all_inputs[i]
+            target_text = all_targets[i]
+            pred_text = all_predictions[i]
+            
+            # Calculate ROUGE for this single sample
+            sample_rouge = self.rouge_calculator.calculate_rouge([pred_text], [target_text])
+            rouge1_f = sample_rouge.get('rouge1_f', 0.0)
+
+            table.add_data(self.current_epoch, input_text, target_text, pred_text, f"{rouge1_f:.4f}")
         
+        if isinstance(self.logger, WandbLogger):
+            # Access the underlying wandb run object via .experiment
+            wandb_logger = self.logger.experiment
+
+            # Log the table using a dictionary
+            wandb_logger.log({
+                "validation_samples": table
+            })
+        else:
+            ic("WandB logger not found, skipping table logging.")
+
+        # Store metrics and clear outputs
+        self.validation_metrics = {"loss": avg_loss.item(), **rouge_scores}
         ic(f"Validation metrics: {self.validation_metrics}")
-        
-        # Clear outputs for next epoch
         self.validation_step_outputs.clear()
-        
-        # Clear GPU memory
         self.clear_gpu_memory()
         self.log_gpu_memory("Validation epoch end")
     
@@ -325,6 +374,18 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         Returns:
             Generated token IDs
         """
+        assert self.model is not None  # Ensure model is initialized
+        assert self.tokenizer is not None  # Ensure tokenizer is initialized
+        
+        # DEBUG: Log generation parameters occasionally
+        if hasattr(self, '_debug_generation_logged') and not self._debug_generation_logged:
+            ic(f"Generation config: {self.generation_config}")
+            ic(f"Input shape: {input_ids.shape}")
+            ic(f"Max input length: {input_ids.shape[1]}")
+            self._debug_generation_logged = True
+        elif not hasattr(self, '_debug_generation_logged'):
+            self._debug_generation_logged = False
+        
         # Merge generation config with kwargs
         gen_kwargs = {**self.generation_config, **kwargs}
         
@@ -351,6 +412,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         Returns:
             List of decoded text strings
         """
+        assert self.tokenizer is not None  # Ensure tokenizer is initialized
         decoded = []
         for pred in predictions:
             text = self.tokenizer.decode(
@@ -372,6 +434,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         Returns:
             List of decoded text strings
         """
+        assert self.tokenizer is not None  # Ensure tokenizer is initialized
         # Replace -100 with pad token for decoding
         labels = labels.clone()
         labels[labels == -100] = self.tokenizer.pad_token_id
@@ -386,9 +449,20 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             decoded.append(text.strip())
         
         return decoded
-    
+    def _decode_inputs(self, input_ids: torch.Tensor) -> List[str]:
+        """Decode input token IDs to text."""
+        assert self.tokenizer is not None  # Ensure tokenizer is initialized
+        decoded = []
+        for inp in input_ids:
+            text = self.tokenizer.decode(
+                inp,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=True
+            )
+            decoded.append(text.strip())
+        return decoded    
 
-    def configure_optimizers(self) -> Dict[str, Any]:
+    def configure_optimizers(self) -> Any:
         """Configure optimizers and learning rate schedulers."""
         # Setup optimizer
         optimizer_cfg = self.training_cfg.optimizer
@@ -420,7 +494,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             scheduler = get_cosine_schedule_with_warmup(
                 optimizer=optimizer,
                 num_warmup_steps=warmup_steps,
-                num_training_steps=total_steps
+                num_training_steps=int(total_steps)
             )
             
             return {
@@ -472,12 +546,21 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             average=True
         )
         
-         # Log all ROUGE metrics with an "eval_" prefix
-        self.log("eval/loss", avg_loss)
+        flat_scores = {}
+        for main_key, value_dict in rouge_scores.items():
+            if isinstance(value_dict, dict):
+                for sub_key, score in value_dict.items():
+                    # Creates keys like "rouge1_f", "rouge1_p", etc.
+                    flat_scores[f"{main_key}_{sub_key}"] = score
+            else:
+                # Handles cases where the score is already flat
+                flat_scores[main_key] = value_dict
+
+        # Log the flattened scores
         self.log_dict(
-            {f"eval/{k}": v for k, v in rouge_scores.items()},
+            {f"eval/{k}": v for k, v in flat_scores.items()},
             sync_dist=True
-        )
+)
         
         ic(f"Final Evaluation metrics: {rouge_scores}")
         self.test_step_outputs.clear()   

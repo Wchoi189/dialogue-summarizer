@@ -44,11 +44,13 @@ class DialoguePreprocessor:
         special_tokens = self.preprocessing_cfg.special_tokens
         
         if special_tokens:
-            # Ensure special tokens are strings
+            # Ensure special tokens are strings and add them individually
             special_tokens_list = [str(token) for token in special_tokens]
-            special_tokens_dict = {"additional_special_tokens": special_tokens_list}
-            num_added = self.tokenizer.add_special_tokens(special_tokens_dict)
-            ic(f"Added {num_added} special tokens: {special_tokens_list}")
+            total_added = 0
+            for token in special_tokens_list:
+                num_added = self.tokenizer.add_tokens(token, special_tokens=True)
+                total_added += num_added
+            ic(f"Added {total_added} special tokens: {special_tokens_list}")
     
     def clean_text(self, text: str) -> str:
         """
@@ -190,27 +192,26 @@ class DialoguePreprocessor:
         if summary is not None:
             summary = self.preprocess_summary(summary)
 
-        # ✅ REFACTORED TOKENIZATION
-        # Let the tokenizer handle both dialogue and summary (as text_target)
+        # ✅ MODERN TOKENIZATION - using text_target instead of deprecated as_target_tokenizer
+        # Tokenize dialogue (input)
         model_inputs = self.tokenizer(
             dialogue,
-            text_target=summary,
             max_length=self.preprocessing_cfg.max_input_length,
             truncation=True, # Truncate dialogue if too long
             padding=self.preprocessing_cfg.padding,
             return_tensors="pt" if not is_inference else None
         )
 
-        # For training/validation, truncate the labels separately
+        # For training/validation, tokenize the summary (target) using text_target parameter
         if summary is not None:
-            with self.tokenizer.as_target_tokenizer():
-                labels = self.tokenizer(
-                    summary,
-                    max_length=self.preprocessing_cfg.max_target_length,
-                    truncation=True,
-                    padding=self.preprocessing_cfg.padding,
-                    return_tensors="pt" if not is_inference else None
-                )
+            # Use the modern approach with text_target parameter
+            labels = self.tokenizer(
+                text_target=summary,
+                max_length=self.preprocessing_cfg.max_target_length,
+                truncation=True,
+                padding=self.preprocessing_cfg.padding,
+                return_tensors="pt" if not is_inference else None
+            )
             model_inputs['labels'] = labels['input_ids']
 
         # No need to manually create decoder_input_ids, the model handles it.

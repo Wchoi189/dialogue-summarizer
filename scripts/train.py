@@ -22,7 +22,7 @@ from pytorch_lightning.callbacks import (
 from pytorch_lightning.loggers import TensorBoardLogger
 
 # Add src to path
-sys.path.append(str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from data.datamodule import DialogueDataModule
 from models.kobart_model import KoBARTSummarizationModel
@@ -120,6 +120,7 @@ class DialogueTrainer:
         
         # Setup trainer
         trainer = self._setup_trainer(output_dir, resume_from, fast_dev_run)
+        assert isinstance(trainer.checkpoint_callback, ModelCheckpoint)
         
         # Train model
         ic("Starting training...")
@@ -152,6 +153,7 @@ class DialogueTrainer:
         ic(f"Training completed. Best model: {best_model_path}")
         
         # Log final results
+        assert self.experiment_logger is not None
         if hasattr(model, "validation_metrics"):
             self.experiment_logger.log_final_results(model.validation_metrics)
         
@@ -164,7 +166,7 @@ class DialogueTrainer:
     def validate(
         self,
         config_name: str = "config",
-        checkpoint_path: str = None,
+        checkpoint_path: Optional[str] = None,
         config_path: Optional[str] = None,
         overrides: Optional[List[str]] = None
     ) -> dict:
@@ -222,10 +224,11 @@ class DialogueTrainer:
         results = trainer.validate(model, datamodule=datamodule)
         
         ic(f"Validation results: {results}")
-        return results[0] if results else {}
+        return dict(results[0]) if results else {}
     
     def _setup_experiment_tracking(self) -> None:
         """Setup experiment tracking with WandB."""
+        assert self.cfg is not None
         # Setup WandB if configured
         if "wandb" in self.cfg and not self.cfg.wandb.get("offline", False):
             self.wandb_manager = WandBManager(self.cfg)
@@ -246,6 +249,7 @@ class DialogueTrainer:
     
     def _create_output_directories(self) -> Path:
         """Create output directories."""
+        assert self.cfg is not None, "Configuration must be loaded before creating output directories"
         output_dir = Path(self.cfg.output_dir)
         
         # Create subdirectories
@@ -261,7 +265,8 @@ class DialogueTrainer:
         
         # Save configuration
         config_path = output_dir / "configs" / "config.yaml"
-        self.config_manager.save_config(self.cfg, config_path)
+        if self.cfg is not None:
+            self.config_manager.save_config(self.cfg, config_path)
         
         ic(f"Output directories created: {output_dir}")
         return output_dir
@@ -273,6 +278,7 @@ class DialogueTrainer:
         fast_dev_run: bool = False
     ) -> pl.Trainer:
         """Setup PyTorch Lightning trainer."""
+        assert self.cfg is not None, "Configuration must be loaded before setting up trainer"
         training_cfg = self.cfg.training
         
         # Setup callbacks

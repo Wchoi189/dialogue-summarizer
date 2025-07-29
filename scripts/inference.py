@@ -16,7 +16,7 @@ import torch
 from icecream import ic
 
 # Add src to path
-sys.path.append(str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from data.datamodule import DialogueDataModule
 from inference.predictor import DialoguePredictor

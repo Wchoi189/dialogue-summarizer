@@ -7,8 +7,7 @@ Evaluates trained models on validation or test sets with ROUGE metrics.
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
-
+from typing import Dict, List, Optional, Union, Any
 import click
 import pandas as pd
 import pytorch_lightning as pl
@@ -17,7 +16,7 @@ from icecream import ic
 from pytorch_lightning.loggers import TensorBoardLogger
 
 # Add src to path
-sys.path.append(str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from data.datamodule import DialogueDataModule
 from evaluation.evaluator import DialogueEvaluator
@@ -43,11 +42,11 @@ class DialogueEvaluationRunner:
         config_name: str = "config",
         config_path: Optional[str] = None,
         split: str = "val",
-        output_dir: Optional[str] = None,
+        output_dir: Optional[Union[str, Path]] = None,
         overrides: Optional[List[str]] = None,
         batch_size: Optional[int] = None,
         **kwargs
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         """
         Evaluate model on specified dataset split.
         
@@ -84,6 +83,7 @@ class DialogueEvaluationRunner:
             config_name=config_name,
             overrides=overrides
         )
+        assert self.cfg is not None
         
         # Setup logging
         setup_logging(self.cfg)
@@ -127,19 +127,28 @@ class DialogueEvaluationRunner:
         ic("Generating detailed predictions...")
         predictions = trainer.predict(model, dataloader)
         
-        # Process predictions and save results
-        evaluation_results = self._process_predictions(
-            predictions, datamodule, split, output_dir
-        )
+        # Check if predictions is None
+        if predictions is None:
+            ic("No predictions returned from trainer.predict; skipping detailed analysis.")
+            evaluation_results = {"num_predictions": 0}
+        else:
+            # Process predictions and save results
+            evaluation_results = self._process_predictions(
+                predictions, datamodule, split, output_dir
+            )
         
         # Combine trainer results with detailed analysis
-        if results:
-            evaluation_results.update(results[0])
+        if results and isinstance(results[0], dict):
+            # Convert any int values to float for consistency
+            trainer_results = {k: float(v) if isinstance(v, (int, float)) else v for k, v in results[0].items()}
+            evaluation_results = {**evaluation_results, **trainer_results}
         
         # Save evaluation summary
         self._save_evaluation_summary(evaluation_results, output_dir, split)
         
         ic(f"Evaluation complete. Results: {evaluation_results}")
+        # Ensure all values are float for type consistency
+        evaluation_results = {k: float(v) if isinstance(v, int) else v for k, v in evaluation_results.items()}
         return evaluation_results
     
     def compare_models(
@@ -148,7 +157,7 @@ class DialogueEvaluationRunner:
         model_names: Optional[List[str]] = None,
         config_name: str = "config",
         split: str = "val",
-        output_dir: Optional[str] = None,
+        output_dir: Optional[Union[str, Path]] = None, # MODIFIED
         **kwargs
     ) -> Dict[str, Dict[str, float]]:
         """
@@ -213,7 +222,7 @@ class DialogueEvaluationRunner:
         self,
         submission_file: str,
         reference_file: Optional[str] = None,
-        output_dir: Optional[str] = None
+        output_dir: Optional[Union[str, Path]] = None
     ) -> Dict[str, float]:
         """
         Evaluate submission file against references.
@@ -276,7 +285,10 @@ class DialogueEvaluationRunner:
             save_dir=output_dir / "logs",
             name="evaluation"
         )
-        
+
+        if self.cfg is None:
+            raise ValueError("Configuration (self.cfg) must be loaded before setting up the trainer.")
+
         trainer = pl.Trainer(
             accelerator=self.cfg.training.accelerator,
             devices=self.cfg.training.devices,
@@ -287,12 +299,12 @@ class DialogueEvaluationRunner:
             deterministic=self.cfg.training.deterministic,
             benchmark=self.cfg.training.benchmark,
         )
-        
+
         return trainer
     
     def _process_predictions(
         self,
-        predictions: List[Dict],
+        predictions: List[List[Any]],
         datamodule: DialogueDataModule,
         split: str,
         output_dir: Path
@@ -302,9 +314,19 @@ class DialogueEvaluationRunner:
         all_predictions = []
         all_sample_ids = []
         
+        # Each batch_output is a list, possibly of dicts or tuples
         for batch_output in predictions:
-            all_predictions.extend(batch_output["predictions"])
-            all_sample_ids.extend(batch_output["sample_ids"])
+            # If batch_output is a dict, use keys; if it's a tuple/list, unpack accordingly
+            if isinstance(batch_output, dict):
+                all_predictions.extend(batch_output.get("predictions", []))
+                all_sample_ids.extend(batch_output.get("sample_ids", []))
+            elif isinstance(batch_output, (list, tuple)) and len(batch_output) == 2:
+                preds, ids = batch_output
+                all_predictions.extend(preds)
+                all_sample_ids.extend(ids)
+            else:
+                # fallback: treat batch_output as predictions only
+                all_predictions.extend(batch_output)
         
         # Create predictions DataFrame
         predictions_df = pd.DataFrame({
@@ -340,7 +362,7 @@ class DialogueEvaluationRunner:
     
     def _save_evaluation_summary(
         self,
-        results: Dict[str, float],
+        results: Dict[str, Any],
         output_dir: Path,
         split: str
     ) -> None:
