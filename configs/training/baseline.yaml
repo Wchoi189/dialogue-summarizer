@@ -21,8 +21,8 @@ accumulate_grad_batches: 2
 # Optimizer
 optimizer:
   name: "adamw"
-  lr: 5e-5 # A slightly higher starting point can also work, but monitor it
-  weight_decay: 0.05
+  lr: 1e-5              # ← REDUCED from 5e-5
+  weight_decay: 0.01    # ← REDUCED from 0.05
   betas: [0.9, 0.999]
   eps: 1.0e-8
 
@@ -42,13 +42,14 @@ predict_with_generate: true
 
 # Generation settings for validation
 generation:
-  max_length: 64  # 추천: 128 -> 64
-  min_length: 15  # 추천: 10 -> 15
-  num_beams: 4
-  no_repeat_ngram_size: 2
-  early_stopping: true
+  max_length: 100        # ← INCREASED from 64
+  min_length: 1          # ← DECREASED from 15 
+  num_beams: 1           # ← CHANGED to greedy (like peer)
+  no_repeat_ngram_size: 3 # ← INCREASED from 2
+  early_stopping: false  # ← DISABLED (required with num_beams=1)
   do_sample: false
-  length_penalty: 1.0
+  length_penalty: 1.2    # ← ADDED length penalty
+  repetition_penalty: 1.1 # ← ADDED to reduce repetition
 
 # Model saving
 save_strategy: "epoch"
@@ -72,7 +73,7 @@ gradient_clip_val: 1.0
 gradient_clip_algorithm: "norm"
 
 # Logging
-log_every_n_steps: 50 # LOG SPAM
+log_every_n_steps: 100 # LOG SPAM
 # logging_strategy: "epoch"
 
 # Memory optimization

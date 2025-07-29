@@ -179,44 +179,43 @@ class DialoguePreprocessor:
     from typing import Mapping, Any
 
     def prepare_inputs(
-        self,
-        dialogue: str,
-        summary: Optional[str] = None,
-        is_inference: bool = False
-    ) -> Mapping[str, Any]:
-        """
-        Prepare model inputs from dialogue and summary.
-        """
-        # Preprocess inputs
-        dialogue = self.preprocess_dialogue(dialogue)
-        if summary is not None:
-            summary = self.preprocess_summary(summary)
+            self,
+            dialogue: str,
+            summary: Optional[str] = None,
+            is_inference: bool = False
+        ) -> Mapping[str, Any]:
+            """
+            FIXED: Prepare model inputs from dialogue and summary.
+            """
+            # Preprocess inputs
+            dialogue = self.preprocess_dialogue(dialogue)
+            if summary is not None:
+                summary = self.preprocess_summary(summary)
 
-        # ✅ MODERN TOKENIZATION - using text_target instead of deprecated as_target_tokenizer
-        # Tokenize dialogue (input)
-        model_inputs = self.tokenizer(
-            dialogue,
-            max_length=self.preprocessing_cfg.max_input_length,
-            truncation=True, # Truncate dialogue if too long
-            padding=self.preprocessing_cfg.padding,
-            return_tensors="pt" if not is_inference else None
-        )
-
-        # For training/validation, tokenize the summary (target) using text_target parameter
-        if summary is not None:
-            # Use the modern approach with text_target parameter
-            labels = self.tokenizer(
-                text_target=summary,
-                max_length=self.preprocessing_cfg.max_target_length,
+            # ✅ FIXED TOKENIZATION - Standard approach for KoBART
+            # Tokenize dialogue (input)
+            model_inputs = self.tokenizer(
+                dialogue,
+                max_length=self.preprocessing_cfg.max_input_length,
                 truncation=True,
                 padding=self.preprocessing_cfg.padding,
                 return_tensors="pt" if not is_inference else None
             )
-            model_inputs['labels'] = labels['input_ids']
 
-        # No need to manually create decoder_input_ids, the model handles it.
-        # The forward method of BartForConditionalGeneration creates them from labels.
-        return model_inputs
+            # For training/validation, tokenize the summary (target)
+            if summary is not None:
+                # ✅ FIXED: Use standard tokenization instead of text_target
+                with self.tokenizer.as_target_tokenizer():
+                    labels = self.tokenizer(
+                        summary,
+                        max_length=self.preprocessing_cfg.max_target_length,
+                        truncation=True,
+                        padding=self.preprocessing_cfg.padding,
+                        return_tensors="pt" if not is_inference else None
+                    )
+                model_inputs['labels'] = labels['input_ids']
+
+            return model_inputs
     
     def decode_outputs(
         self,

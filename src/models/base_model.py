@@ -300,27 +300,28 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
 
             table.add_data(self.current_epoch, input_text, target_text, pred_text, f"{rouge1_f:.4f}")
         
-        wandb_run = None
-        # A. Check if the logger is a collection of multiple loggers (list or tuple)
-        if hasattr(self.logger, '__iter__') and not isinstance(self.logger, WandbLogger):
-            for logger in self.logger:
-                if isinstance(logger, WandbLogger):
-                    # If we find the WandbLogger, get its experiment object and stop searching
-                    wandb_run = logger.experiment
-                    break
-        # B. Check if it's a single WandbLogger instance
-        elif isinstance(self.logger, WandbLogger):
-            wandb_run = self.logger.experiment
+        try:
+            import wandb
+            if wandb.run is not None:
+                # Create a table with columns: Epoch, Input, Ground Truth, Prediction, ROUGE-1
+                table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1"])
+                
+                # Take a sample of 5 from the validation set to log
+                for i in range(min(len(all_predictions), 5)):
+                    input_text = all_inputs[i][:100] + "..." if len(all_inputs[i]) > 100 else all_inputs[i]
+                    target_text = all_targets[i]
+                    pred_text = all_predictions[i]
+                    
+                    # Calculate ROUGE for this single sample
+                    sample_rouge = self.rouge_calculator.calculate_rouge([pred_text], [target_text])
+                    rouge1_f = sample_rouge.get('rouge1_f', 0.0)
 
-        # C. Log the table if the wandb run object was successfully found
-        if wandb_run:
-            try:
-                wandb_run.log({"validation_samples": table})
-            except Exception as e:
-                ic(f"Failed to log WandB table: {e}")
-        else:
-            # This message will now only appear if there is truly no WandB logger
-            ic("WandB logger not found in trainer, skipping table logging.")
+                    table.add_data(self.current_epoch, input_text, target_text, pred_text, f"{rouge1_f:.4f}")
+                
+                wandb.log({"validation_samples": table})
+                ic("WandB table logged successfully")
+        except Exception as e:
+            ic(f"WandB logging failed (this is OK): {e}")
         # Store metrics and clear outputs
         self.validation_metrics = {"loss": avg_loss.item(), **rouge_scores}
         ic(f"Validation metrics: {self.validation_metrics}")

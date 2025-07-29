@@ -13,6 +13,9 @@ import pytorch_lightning as pl
 import torch
 import logging
 
+# Suppress specific transformer warnings
+logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
+logging.getLogger("transformers.generation.utils").setLevel(logging.ERROR)
 from icecream import ic
 from pytorch_lightning.callbacks import (
     EarlyStopping,
