@@ -203,12 +203,12 @@ class DialoguePreprocessor:
 
         # For training/validation, tokenize the summary (target)
         if summary is not None:
-            # ✅ FINAL FIX: Remove deprecated as_target_tokenizer
+            # ✅ CRITICAL FIX: Do NOT pad labels here - let collate function handle it with -100
             labels = self.tokenizer(
                 summary,
                 max_length=self.preprocessing_cfg.max_target_length,
                 truncation=True,
-                padding=self.preprocessing_cfg.padding,
+                padding=False,  # ← CRITICAL: No padding here!
                 return_tensors="pt" if not is_inference else None,
                 add_special_tokens=True
             )
