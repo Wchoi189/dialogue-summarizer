@@ -30,9 +30,18 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     python scripts/train.py train --config-name config
     ```
 
+    **Debug training run**
+    ```bash
+    python scripts/train.py train --override training=baseline-debug
+    ```
+
 4.  **Generate Predictions**
     ```bash
     python scripts/inference.py submission /path/to/best/model.ckpt
+
+    python scripts/inference.py submission \
+    /home/wb2x/workspace/dialogue-summarizer/outputs/models/last.ckpt \
+    --output-file submission.csv
     ```
 **Wandb login**
 ```bash

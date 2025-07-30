@@ -412,54 +412,89 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             )
         
         return outputs
-    
-    def _decode_predictions(self, predictions: torch.Tensor) -> List[str]:
-        """
-        Decode prediction token IDs to text.
+## Products <unwanted> EOS and PAD tokens
+    # def _decode_predictions(self, predictions: torch.Tensor) -> List[str]:
+    #     """
+    #     Decode prediction token IDs to text.
         
-        Args:
-            predictions: Generated token IDs
+    #     Args:
+    #         predictions: Generated token IDs
             
-        Returns:
-            List of decoded text strings
-        """
-        assert self.tokenizer is not None  # Ensure tokenizer is initialized
+    #     Returns:
+    #         List of decoded text strings
+    #     """
+    #     assert self.tokenizer is not None  # Ensure tokenizer is initialized
+    #     decoded = []
+    #     for pred in predictions:
+    #         text = self.tokenizer.decode(
+    #             pred,
+    #             skip_special_tokens=False,
+    #             clean_up_tokenization_spaces=True
+    #         )
+    #         decoded.append(text.strip())
+        
+    #     return decoded
+    
+    # def _decode_targets(self, labels: torch.Tensor) -> List[str]:
+    #     """
+    #     Decode target labels to text.
+        
+    #     Args:
+    #         labels: Target token IDs
+            
+    #     Returns:
+    #         List of decoded text strings
+    #     """
+    #     assert self.tokenizer is not None  # Ensure tokenizer is initialized
+    #     # Replace -100 with pad token for decoding
+    #     labels = labels.clone()
+    #     labels[labels == -100] = self.tokenizer.pad_token_id
+        
+    #     decoded = []
+    #     for label in labels:
+    #         text = self.tokenizer.decode(
+    #             label,
+    #             skip_special_tokens=False,
+    #             clean_up_tokenization_spaces=True
+    #         )
+    #         decoded.append(text.strip())
+        
+    #     return decoded
+    
+        def _decode_predictions(self, predictions: torch.Tensor) -> List[str]:
+        """Decode prediction token IDs to text."""
+        assert self.tokenizer is not None
         decoded = []
         for pred in predictions:
+            # Decode while keeping special tokens like #Person#
             text = self.tokenizer.decode(
                 pred,
                 skip_special_tokens=False,
                 clean_up_tokenization_spaces=True
             )
+            # ✅ Manually remove only the pad and eos tokens for a clean log
+            text = text.replace(self.tokenizer.pad_token, "").replace(self.tokenizer.eos_token, "")
             decoded.append(text.strip())
-        
         return decoded
     
     def _decode_targets(self, labels: torch.Tensor) -> List[str]:
-        """
-        Decode target labels to text.
-        
-        Args:
-            labels: Target token IDs
-            
-        Returns:
-            List of decoded text strings
-        """
-        assert self.tokenizer is not None  # Ensure tokenizer is initialized
-        # Replace -100 with pad token for decoding
+        """Decode target labels to text."""
+        assert self.tokenizer is not None
         labels = labels.clone()
         labels[labels == -100] = self.tokenizer.pad_token_id
-        
         decoded = []
         for label in labels:
+            # Decode while keeping special tokens like #Person#
             text = self.tokenizer.decode(
                 label,
-                skip_special_tokens=True,
+                skip_special_tokens=False,
                 clean_up_tokenization_spaces=True
             )
+            # ✅ Manually remove only the pad and eos tokens for a clean log
+            text = text.replace(self.tokenizer.pad_token, "").replace(self.tokenizer.eos_token, "")
             decoded.append(text.strip())
-        
         return decoded
+
     def _decode_inputs(self, input_ids: torch.Tensor) -> List[str]:
         """Decode input token IDs to text."""
         assert self.tokenizer is not None  # Ensure tokenizer is initialized
@@ -467,7 +502,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         for inp in input_ids:
             text = self.tokenizer.decode(
                 inp,
-                skip_special_tokens=True,
+                skip_special_tokens=False,
                 clean_up_tokenization_spaces=True
             )
             decoded.append(text.strip())

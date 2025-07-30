@@ -3,43 +3,43 @@
 Training script for dialogue summarization using Click CLI.
 Enhanced with comprehensive logging and experiment tracking.
 """
+# FILE: scripts/train.py
 
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import List, Optional
+
+# Third-Party Imports
 import click
 import pytorch_lightning as pl
 import torch
-import torch._dynamo
-# Increase the cache limit from the default of 8
-torch._dynamo.config.cache_size_limit = 64
-import logging
-import wandb
-wandb.init(project="dialogue-summarization(wb2x)")
-
-# Suppress specific transformer warnings
-logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
-logging.getLogger("transformers.generation.utils").setLevel(logging.ERROR)
 from icecream import ic
-from pytorch_lightning.callbacks import (
-    EarlyStopping,
-    LearningRateMonitor,
-    ModelCheckpoint,
-    TQDMProgressBar,
-)
+from pytorch_lightning.callbacks import (EarlyStopping, LearningRateMonitor,
+                                         ModelCheckpoint, TQDMProgressBar)
 from pytorch_lightning.loggers import TensorBoardLogger
 
-# Add src to path
+# --- Configuration (Should be inside a main function) ---
+
+# Suppress informational messages from the transformers library
+logging.getLogger("transformers").setLevel(logging.ERROR)
+
+# Increase the torch.compile cache limit to prevent recompilation warnings
+# Note: torch._dynamo is an internal API and may change in future versions.
+if hasattr(torch, "_dynamo") and hasattr(torch._dynamo, "config"):
+    torch._dynamo.config.cache_size_limit = 64
+
+# --- Local Application Imports ---
+
+# Add project source to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-# Suppress the specific, repetitive "use_cache" warning
-logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
+
 from data.datamodule import DialogueDataModule
 from models.kobart_model import KoBARTSummarizationModel
 from utils.config_utils import ConfigManager
 from utils.logging_utils import ExperimentLogger, setup_logging
 from utils.wandb_utils import WandBManager, WandBMetricsCallback
-
 
 class DialogueTrainer:
     """Main trainer class for dialogue summarization."""
@@ -297,7 +297,7 @@ class DialogueTrainer:
         # Model checkpointing
         checkpoint_callback = ModelCheckpoint(
             dirpath=output_dir / "models",
-            filename="best-{epoch:02d}-{val_rouge_f:.4f}",
+            filename="best-{epoch:02d}-{val_rouge_f:.5f}",  # ✅ CHANGED from .4f to .5f
             monitor=training_cfg.monitor,
             mode=training_cfg.mode,
             save_top_k=training_cfg.save_top_k,
