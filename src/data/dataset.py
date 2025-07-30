@@ -90,12 +90,12 @@ class DialogueDataset(Dataset):
         row = self.data.iloc[idx]
         
         # Get dialogue text
-        dialogue = row[self.input_col]
+        dialogue = str(row[self.input_col])
         
         # Get summary if available
         summary = None
         if not self.is_inference and self.target_col in row:
-            summary = row[self.target_col]
+            summary = str(row[self.target_col])
         
         # Preprocess and tokenize
         inputs = self.preprocessor.prepare_inputs(
@@ -214,7 +214,7 @@ class InferenceDataset(DialogueDataset):
             Dictionary with model inputs (no labels)
         """
         row = self.data.iloc[idx]
-        dialogue = row[self.input_col]
+        dialogue = str(row[self.input_col])
         
         # Preprocess and tokenize (no summary for inference)
         inputs = self.preprocessor.prepare_inputs(
@@ -236,9 +236,8 @@ class InferenceDataset(DialogueDataset):
         
         return tensor_inputs
 
-
 class CollateFunction:
-    """Custom collate function for dialogue data."""
+    """Fixed collate function for dialogue data."""
     
     def __init__(self, tokenizer, is_inference: bool = False):
         """
@@ -264,7 +263,7 @@ class CollateFunction:
         # Separate keys
         tensor_keys = ["input_ids", "attention_mask"]
         if not self.is_inference:
-            tensor_keys.extend(["decoder_input_ids", "decoder_attention_mask", "labels"])
+            tensor_keys.append("labels")
         
         # Initialize batch dict
         batched = {}
@@ -278,32 +277,34 @@ class CollateFunction:
             if key in batch[0]:
                 sequences = [sample[key] for sample in batch]
                 
-                # Pad sequences
-                if key in ["input_ids", "decoder_input_ids", "labels"]:
-                    # Pad with tokenizer's pad token
-                    padded = torch.nn.utils.rnn.pad_sequence(
-                        sequences,
-                        batch_first=True,
-                        padding_value=self.tokenizer.pad_token_id
-                    )
+                # Ensure all sequences are 1D tensors
+                sequences = [seq.squeeze() if seq.dim() > 1 else seq for seq in sequences]
+                
+                # Determine padding value - THIS IS THE CRITICAL FIX
+                if key == "labels":
+                    padding_value = -100  # Use -100 directly for labels
+                elif key == "input_ids":
+                    padding_value = self.tokenizer.pad_token_id or 0
                 else:
-                    # Pad attention masks with 0
-                    padded = torch.nn.utils.rnn.pad_sequence(
-                        sequences,
-                        batch_first=True,
-                        padding_value=0
-                    )
+                    padding_value = 0  # For attention masks
+                
+                # Pad sequences
+                padded = torch.nn.utils.rnn.pad_sequence(
+                    sequences,
+                    batch_first=True,
+                    padding_value=padding_value
+                )
                 
                 batched[key] = padded
         
-        # Handle labels for training (set padding tokens to -100)
-        if "labels" in batched:
-            labels = batched["labels"]
-            labels[labels == self.tokenizer.pad_token_id] = -100
-            batched["labels"] = labels
+        # ❌ CRITICAL: REMOVE ALL POST-PROCESSING OF LABELS
+        # DO NOT ADD ANYTHING LIKE:
+        # if "labels" in batched:
+        #     labels = batched["labels"]
+        #     labels[labels == self.tokenizer.pad_token_id] = -100
+        #     batched["labels"] = labels
         
         return batched
-
 
 def create_datasets(
     cfg: DictConfig,

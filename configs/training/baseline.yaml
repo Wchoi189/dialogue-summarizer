@@ -42,14 +42,14 @@ predict_with_generate: true
 
 # Generation settings for validation
 generation:
-  max_length: 100        # ← INCREASED from 64
-  min_length: 1          # ← DECREASED from 15 
-  num_beams: 1           # ← CHANGED to greedy (like peer)
-  no_repeat_ngram_size: 3 # ← INCREASED from 2
-  early_stopping: false  # ← DISABLED (required with num_beams=1)
+  max_length: 100
+  min_length: 1
+  num_beams: 1
+  no_repeat_ngram_size: 3
+  early_stopping: false
   do_sample: false
-  length_penalty: 1.2    # ← ADDED length penalty
-  repetition_penalty: 1.1 # ← ADDED to reduce repetition
+  # REMOVED length_penalty - not compatible with num_beams=1
+  repetition_penalty: 1.2  # This works with greedy decoding
 
 # Model saving
 save_strategy: "epoch"

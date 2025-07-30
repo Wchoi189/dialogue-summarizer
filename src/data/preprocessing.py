@@ -179,43 +179,42 @@ class DialoguePreprocessor:
     from typing import Mapping, Any
 
     def prepare_inputs(
-            self,
-            dialogue: str,
-            summary: Optional[str] = None,
-            is_inference: bool = False
-        ) -> Mapping[str, Any]:
-            """
-            FIXED: Prepare model inputs from dialogue and summary.
-            """
-            # Preprocess inputs
-            dialogue = self.preprocess_dialogue(dialogue)
-            if summary is not None:
-                summary = self.preprocess_summary(summary)
+        self,
+        dialogue: str,
+        summary: Optional[str] = None,
+        is_inference: bool = False
+    ) -> Mapping[str, Any]:
+        """
+        FINAL FIXED: Prepare model inputs from dialogue and summary.
+        """
+        # Preprocess inputs
+        dialogue = self.preprocess_dialogue(dialogue)
+        if summary is not None:
+            summary = self.preprocess_summary(summary)
 
-            # ✅ FIXED TOKENIZATION - Standard approach for KoBART
-            # Tokenize dialogue (input)
-            model_inputs = self.tokenizer(
-                dialogue,
-                max_length=self.preprocessing_cfg.max_input_length,
+        # Tokenize dialogue (input)
+        model_inputs = self.tokenizer(
+            dialogue,
+            max_length=self.preprocessing_cfg.max_input_length,
+            truncation=True,
+            padding=self.preprocessing_cfg.padding,
+            return_tensors="pt" if not is_inference else None
+        )
+
+        # For training/validation, tokenize the summary (target)
+        if summary is not None:
+            # ✅ FINAL FIX: Remove deprecated as_target_tokenizer
+            labels = self.tokenizer(
+                summary,
+                max_length=self.preprocessing_cfg.max_target_length,
                 truncation=True,
                 padding=self.preprocessing_cfg.padding,
-                return_tensors="pt" if not is_inference else None
+                return_tensors="pt" if not is_inference else None,
+                add_special_tokens=True
             )
+            model_inputs['labels'] = labels['input_ids']
 
-            # For training/validation, tokenize the summary (target)
-            if summary is not None:
-                # ✅ FIXED: Use standard tokenization instead of text_target
-                with self.tokenizer.as_target_tokenizer():
-                    labels = self.tokenizer(
-                        summary,
-                        max_length=self.preprocessing_cfg.max_target_length,
-                        truncation=True,
-                        padding=self.preprocessing_cfg.padding,
-                        return_tensors="pt" if not is_inference else None
-                    )
-                model_inputs['labels'] = labels['input_ids']
-
-            return model_inputs
+        return model_inputs
     
     def decode_outputs(
         self,

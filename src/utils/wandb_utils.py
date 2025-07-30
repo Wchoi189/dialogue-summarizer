@@ -175,15 +175,12 @@ class WandBManager:
         
         # Add learning rate if available
         if learning_rate != "unknown":
-            # Convert scientific notation to simple format: 1.0e-5 -> 1e5
             if isinstance(learning_rate, (int, float)):
-                if learning_rate >= 0.001:
-                    lr_str = f"{learning_rate:.3f}".replace(".", "")[:4]  # e.g., 0.001 -> 001
-                else:
-                    # For very small learning rates like 1e-5
-                    lr_str = f"{learning_rate:.0e}".replace("e-0", "e").replace("e-", "e")  # 1e-5 -> 1e5
+                # Correctly format the learning rate in scientific notation (e.g., 1e-5)
+                lr_str = f"{learning_rate:.0e}".replace("e-0", "e")
             else:
-                lr_str = str(learning_rate).replace(".", "")[:4]
+                # Fallback for non-numeric types
+                lr_str = str(learning_rate)
             components.append(f"lr{lr_str}")
         
         # Add early stopping info

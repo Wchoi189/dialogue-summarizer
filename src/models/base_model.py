@@ -285,23 +285,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         self.log_dict({f"val/{k}": v for k, v in rouge_scores.items()}, sync_dist=True)  # type: ignore
 
         # ✅ CREATE AND LOG A WANDB TABLE WITH SAMPLE PREDICTIONS
-        # Create a table with columns: Epoch, Input, Ground Truth, Prediction, ROUGE-1
-        table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1"])
-        
-        # Take a sample of 8 from the validation set to log
-        for i in range(min(len(all_predictions), 8)):
-            input_text = all_inputs[i]
-            target_text = all_targets[i]
-            pred_text = all_predictions[i]
-            
-            # Calculate ROUGE for this single sample
-            sample_rouge = self.rouge_calculator.calculate_rouge([pred_text], [target_text])
-            rouge1_f = sample_rouge.get('rouge1_f', 0.0)
-
-            table.add_data(self.current_epoch, input_text, target_text, pred_text, f"{rouge1_f:.4f}")
-        
         try:
-            import wandb
             if wandb.run is not None:
                 # Create a table with columns: Epoch, Input, Ground Truth, Prediction, ROUGE-1
                 table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1"])

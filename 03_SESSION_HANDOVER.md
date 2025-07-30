@@ -1,3 +1,123 @@
+
+
+### DEBUG IN PROGRESS ###
+
+# Session Handover Summary - Critical Model Performance Issue
+
+## **Current Status: CRITICAL BUG IDENTIFIED BUT NOT YET FIXED**
+
+### **The Problem**
+Your model is generating complete gibberish (ROUGE ~0.04 vs peer's ~0.58) because the **CollateFunction is broken**. It's not using -100 padding tokens for labels, causing the model to learn from pad tokens instead of ignoring them.
+
+### **Verification Results**
+```
+❌ FAILURE: No -100 padding tokens found!
+🔧 CollateFunction is still broken!
+Found tokens: [3, 243, 284, 287...] # These should be -100 for padding
+```
+
+## **Root Cause Confirmed**
+- **Manual tokenization works perfectly** (debug_pipeline.py showed 106/128 tokens as -100)
+- **DataLoader pipeline is broken** (verify_collate.py shows 0/4096 tokens as -100)
+- **CollateFunction replacement not applied correctly**
+
+## **Immediate Action Required**
+
+### **1. Find and Replace CollateFunction**
+```bash
+# Find the broken CollateFunction
+grep -n -A 10 "class CollateFunction" src/data/dataset.py
+
+# Look for the problematic line that breaks labels
+grep -n "labels\[labels == self.tokenizer.pad_token_id\] = -100" src/data/dataset.py
+```
+
+### **2. Complete Replacement Needed**
+The CollateFunction in `src/data/dataset.py` must be **completely replaced** with:
+```python
+class CollateFunction:
+    def __init__(self, tokenizer, is_inference: bool = False):
+        self.tokenizer = tokenizer
+        self.is_inference = is_inference
+    
+    def __call__(self, batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+        tensor_keys = ["input_ids", "attention_mask"]
+        if not self.is_inference:
+            tensor_keys.append("labels")
+        
+        batched = {"sample_ids": [sample["sample_id"] for sample in batch]}
+        
+        for key in tensor_keys:
+            if key in batch[0]:
+                sequences = [sample[key].squeeze() if sample[key].dim() > 1 else sample[key] for sample in batch]
+                
+                # CRITICAL: Use -100 directly for labels padding
+                padding_value = -100 if key == "labels" else (self.tokenizer.pad_token_id if key == "input_ids" else 0)
+                
+                batched[key] = torch.nn.utils.rnn.pad_sequence(sequences, batch_first=True, padding_value=padding_value)
+        
+        # CRITICAL: Remove any post-processing that converts pad_token_id to -100
+        return batched
+```
+
+### **3. Verification Script**
+After replacement, run:
+```bash
+python scripts/verify_collate.py
+```
+**Expected**: `-100 padding tokens: 2000-3000` (not 0)
+
+## **What's Working vs Broken**
+
+### ✅ **Working Components**
+- Model initialization (30000→30006 tokens)
+- Special token handling (#Person1# → token 30000)
+- Manual tokenization and decoding
+- Generation config (fixed warnings)
+- Log spam reduction
+
+### ❌ **Broken Component**
+- **CollateFunction**: Still using pad_token_id (3) instead of -100 for labels
+- This causes model to learn meaningless patterns from padding
+
+## **Expected Improvement After Fix**
+- **Padding tokens**: 0/4096 → 2000-3000/4096 (-100 tokens)
+- **Generated text**: "소소소생활" → actual Korean summaries
+- **ROUGE scores**: 0.0000 → 0.10+ immediately
+
+## **Files Modified This Session**
+1. `scripts/debug_model_fixed.py` - Deep debugging (created)
+2. `scripts/debug_pipeline.py` - Pipeline analysis (created)  
+3. `scripts/verify_collate.py` - CollateFunction verification (created)
+4. `src/data/preprocessing.py` - Fixed deprecated `as_target_tokenizer()` 
+5. **`src/data/dataset.py`** - **CollateFunction needs replacement** ⭐
+
+## **Next Session Continuation Prompt**
+
+```
+Continue dialogue summarization debugging. Critical issue identified: CollateFunction in src/data/dataset.py is not using -100 padding for labels, causing model to learn from pad tokens (ID: 3) instead of ignoring them.
+
+Current status:
+- Manual tokenization works perfectly (106/128 tokens are -100)
+- DataLoader shows 0/4096 tokens are -100 (should be ~2000-3000)
+- Model generates gibberish because it learns from padding
+
+Immediate action needed:
+1. Replace CollateFunction class completely in src/data/dataset.py
+2. Remove any post-processing that converts pad_token_id to -100 
+3. Use padding_value=-100 directly in pad_sequence for labels
+4. Verify with scripts/verify_collate.py
+5. Expected result: ~2000-3000 -100 tokens, not 0
+
+All debugging scripts created and ready. This is the final fix needed for proper model performance.
+```
+
+## **Token Usage**
+I don't have access to your specific token count remaining. You can check your usage in your Claude interface. This conversation is quite comprehensive but focused on solving the critical performance issue that's been preventing your model from learning properly.
+
+The good news is we've identified the exact problem and the fix is straightforward - just one class replacement in `src/data/dataset.py`.
+
+### AFTER DEBUG PROCEED WITH PHASE 2D-2E ###
 # Session Handover Summary - Phase 2D-2E Complete
 
 ## **Project Status: Dialogue Summarization with PyTorch Lightning & Hydra**
