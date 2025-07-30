@@ -558,6 +558,11 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             {f"eval/{k}": v for k, v in flat_scores.items()},
             sync_dist=True
 )
-        
+        # ✅ ADD THIS BLOCK to explicitly save the final metrics to the run summary
+        if self.logger and hasattr(self.logger.experiment, "summary"):
+            # Use a clean prefix for the summary dashboard
+            summary_metrics = {f"final_{k}": v for k, v in flat_scores.items()}
+            self.logger.experiment.summary.update(summary_metrics)
+            
         ic(f"Final Evaluation metrics: {rouge_scores}")
         self.test_step_outputs.clear()   

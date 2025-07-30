@@ -40,16 +40,16 @@ check_val_every_n_epoch: 1
 evaluation_strategy: "epoch"
 predict_with_generate: true
 
-# Generation settings for validation
+# In configs/training/baseline.yaml
 generation:
   max_length: 100
   min_length: 1
-  num_beams: 1
+  num_beams: 4           # ← CHANGED from 1 to 4
   no_repeat_ngram_size: 3
-  early_stopping: false
+  early_stopping: true   # ← CHANGED from false
   do_sample: false
-  # REMOVED length_penalty - not compatible with num_beams=1
-  repetition_penalty: 1.2  # This works with greedy decoding
+  repetition_penalty: 1.2
+  length_penalty: 2.0    # ← NOW compatible with beam search
 
 # Model saving
 save_strategy: "epoch"
