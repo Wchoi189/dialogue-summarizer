@@ -10,12 +10,17 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     micromamba env create -f environment.yml
     micromamba activate dialogue-summarization
     ```
-
+    **Remove Environment**
+    ```bash
+    micromamba env list
+    rm -rf /opt/conda/envs/dialogue-summarization
+    or
+    micromamba remove -n dialogue-summarization --all
+    ```
 2.  **Install Dependencies**
     ```bash
     # Install PyTorch with CUDA support
-    pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cu121](https://download.pytorch.org/whl/cu121)
-
+    pip3 install --pre torch==2.6.0.dev20241112+cu121 torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu121 --no-cache-dir
     # Install remaining packages
     pip install -r requirements.txt
     ```
@@ -29,7 +34,12 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     ```bash
     python scripts/inference.py submission /path/to/best/model.ckpt
     ```
-
+**Wandb login**
+```bash
+export WANDB_API_KEY="YOUR_API_KEY"
+source ~/.bashrc
+wandb login
+```
 
 ```markdown
 ## 📁 Project Structure

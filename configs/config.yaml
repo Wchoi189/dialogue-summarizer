@@ -31,7 +31,7 @@ wandb:
   project: "dialogue-summarization(wb2x)"
   entity: "boot_camp_13_2nd_group_2nd"  # Set your wandb entity
   username: "wchoi189@gmail.com"
-  # name: null  # Let the WandBManager generate the name automatically
+  name: null  # Let the WandBManager generate the name automatically
   tags: ["baseline", "kobart"]
   notes: "Dialogue summarization with KoBART"
   offline: false

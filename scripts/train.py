@@ -11,7 +11,12 @@ from typing import List, Optional
 import click
 import pytorch_lightning as pl
 import torch
+import torch._dynamo
+# Increase the cache limit from the default of 8
+torch._dynamo.config.cache_size_limit = 64
 import logging
+import wandb
+wandb.init(project="dialogue-summarization(wb2x)")
 
 # Suppress specific transformer warnings
 logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)

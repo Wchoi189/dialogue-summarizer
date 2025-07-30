@@ -285,10 +285,11 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         self.log_dict({f"val/{k}": v for k, v in rouge_scores.items()}, sync_dist=True)  # type: ignore
 
         # ✅ CREATE AND LOG A WANDB TABLE WITH SAMPLE PREDICTIONS
+        # ✅ CREATE AND LOG A WANDB TABLE WITH SAMPLE PREDICTIONS
         try:
             if wandb.run is not None:
-                # Create a table with columns: Epoch, Input, Ground Truth, Prediction, ROUGE-1
-                table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1"])
+                # STEP 1: Add "ROUGE-2" and "ROUGE-L" to the columns list
+                table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1", "ROUGE-2", "ROUGE-L"])
                 
                 # Take a sample of 5 from the validation set to log
                 for i in range(min(len(all_predictions), 5)):
@@ -298,9 +299,22 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
                     
                     # Calculate ROUGE for this single sample
                     sample_rouge = self.rouge_calculator.calculate_rouge([pred_text], [target_text])
+                    
+                    # STEP 2: Get all three ROUGE f-scores
                     rouge1_f = sample_rouge.get('rouge1_f', 0.0)
+                    rouge2_f = sample_rouge.get('rouge2_f', 0.0)
+                    rougeL_f = sample_rouge.get('rougeL_f', 0.0)
 
-                    table.add_data(self.current_epoch, input_text, target_text, pred_text, f"{rouge1_f:.4f}")
+                    # STEP 3: Add the new scores to the table data
+                    table.add_data(
+                        self.current_epoch,
+                        input_text,
+                        target_text,
+                        pred_text,
+                        f"{rouge1_f:.4f}",
+                        f"{rouge2_f:.4f}",
+                        f"{rougeL_f:.4f}"
+                    )
                 
                 wandb.log({"validation_samples": table})
                 ic("WandB table logged successfully")
@@ -414,7 +428,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         for pred in predictions:
             text = self.tokenizer.decode(
                 pred,
-                skip_special_tokens=True,
+                skip_special_tokens=False,
                 clean_up_tokenization_spaces=True
             )
             decoded.append(text.strip())
@@ -553,16 +567,16 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
                 # Handles cases where the score is already flat
                 flat_scores[main_key] = value_dict
 
-        # Log the flattened scores
+        # This logs metrics to the history charts
         self.log_dict(
             {f"eval/{k}": v for k, v in flat_scores.items()},
             sync_dist=True
-)
+        )
+        
         # ✅ ADD THIS BLOCK to explicitly save the final metrics to the run summary
         if self.logger and hasattr(self.logger.experiment, "summary"):
-            # Use a clean prefix for the summary dashboard
-            summary_metrics = {f"final_{k}": v for k, v in flat_scores.items()}
-            self.logger.experiment.summary.update(summary_metrics)
-            
+            # This populates the "Summary" section in the Wandb Overview tab
+            self.logger.experiment.summary.update(flat_scores)
+
         ic(f"Final Evaluation metrics: {rouge_scores}")
-        self.test_step_outputs.clear()   
+        self.test_step_outputs.clear()
