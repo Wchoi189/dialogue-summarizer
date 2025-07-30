@@ -5,7 +5,7 @@ name: "kobart"
 architecture: "bart"
 
 # Model path/name from HuggingFace
-model_name_or_path: "digit82/kobart-summarization"
+model_name_or_path: "digit82/kobart-summarization"  # Revert to working model
 
 # Model parameters
 parameters:
@@ -29,7 +29,7 @@ parameters:
 
 # Tokenizer settings
 tokenizer:
-  name_or_path: "digit82/kobart-summarization"
+  name_or_path: "digit82/kobart-summarization"  # Use same model for tokenizer
   use_fast: true
   add_special_tokens: true
   

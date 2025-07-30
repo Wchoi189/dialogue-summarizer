@@ -13,7 +13,7 @@ preprocessing:
   max_input_length: 512
   max_target_length: 128
   truncation: true
-  padding: "max_length"
+  padding: false  # ← CHANGED: Let collate function handle padding dynamically
   
   # ✅ CORRECTED: Special tokens matching the dataset format
   special_tokens:

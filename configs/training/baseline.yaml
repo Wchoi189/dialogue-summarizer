@@ -8,20 +8,20 @@ devices: 1                   # ◀️ REVERTED: Target your single available GPU
 precision: "16-mixed"
 
 # Epochs and steps
-max_epochs: 20
+max_epochs: 10          # ← REDUCED from 20 to prevent overfitting
 max_steps: -1
 min_epochs: 1
 
 # Batch sizes
-# Effective batch size is 16 * 2 = 32. Your 24GB GPU can handle this well.
-batch_size: 16
+# Effective batch size is 8 * 4 = 32. Smaller batches for better gradients.
+batch_size: 8           # ← REDUCED from 16 for more frequent updates
 eval_batch_size: 16
-accumulate_grad_batches: 2
+accumulate_grad_batches: 4  # ← INCREASED from 2 to maintain effective batch size
 
 # Optimizer
 optimizer:
   name: "adamw"
-  lr: 1e-5              # ← REDUCED from 5e-5
+  lr: 3e-5              # ← INCREASED from 1e-5 (was too low for base model)
   weight_decay: 0.01    # ← REDUCED from 0.05
   betas: [0.9, 0.999]
   eps: 1.0e-8
@@ -42,14 +42,14 @@ predict_with_generate: true
 
 # In configs/training/baseline.yaml
 generation:
-  max_length: 100
-  min_length: 1
+  max_length: 120        # ← REDUCED from 150 (more reasonable for Korean)
+  min_length: 15         # ← REDUCED from 20 (but still force minimum length)
   num_beams: 4           # ← CHANGED from 1 to 4
   no_repeat_ngram_size: 3
   early_stopping: true   # ← CHANGED from false
   do_sample: false
-  repetition_penalty: 1.2
-  length_penalty: 2.0    # ← NOW compatible with beam search
+  repetition_penalty: 1.4  # ← INCREASED from 1.3 to further reduce repetition
+  length_penalty: 1.2    # ← REDUCED from 1.5 for better length control
 
 # Model saving
 save_strategy: "epoch"
@@ -63,8 +63,8 @@ save_on_train_epoch_end: false
 early_stopping:
   enabled: true
   monitor: "val/rouge_f"
-  patience: 3
-  min_delta: 0.001
+  patience: 2          # ← REDUCED from 3 - stop early if not improving
+  min_delta: 0.005     # ← INCREASED from 0.001 - require more significant improvement
   mode: "max"
   verbose: true
 
