@@ -5,21 +5,3 @@ preprocessing:
   # Processing strategy name
   strategy: "std"
   
-  # Text cleaning options
-  normalize_whitespace: true
-  remove_extra_newlines: true
-  
-  # Tokenization settings
-  max_input_length: 512
-  max_target_length: 128
-  truncation: true
-  padding: false  # ← CHANGED: Let collate function handle padding dynamically
-  
-  # ✅ CORRECTED: Special tokens matching the dataset format
-  special_tokens:
-    - "#Person1#"
-    - "#Person2#"
-    - "#Person3#"
-    - "#PhoneNumber#"
-    - "#Address#"
-    - "#PassportNumber#"

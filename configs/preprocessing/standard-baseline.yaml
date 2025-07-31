@@ -1,0 +1,7 @@
+# @package _global_
+# BASELINE PREPROCESSING SETTINGS
+
+preprocessing:
+  strategy: "std"
+  # All other settings moved to dataset config
+  

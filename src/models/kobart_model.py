@@ -62,8 +62,10 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
             use_fast=tokenizer_cfg.get("use_fast", True)
         )
         
-        # Add special tokens if specified
-        additional_tokens = tokenizer_cfg.get("additional_special_tokens", [])
+        # ✅ CHANGE: Get special tokens from dataset config instead of model config
+        dataset_cfg = self.cfg.dataset
+        additional_tokens = dataset_cfg.preprocessing.get("special_tokens", [])
+        
         if additional_tokens:
             # Ensure tokens are strings
             additional_tokens = [str(token) for token in additional_tokens]
@@ -88,8 +90,8 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         
         # Load model configuration
         config = BartConfig.from_pretrained(model_name)
-        
-        # Update config with custom parameters if specified
+
+        # Update config with custom parameters if specified  
         if "parameters" in self.model_cfg:
             params = self.model_cfg.parameters
             

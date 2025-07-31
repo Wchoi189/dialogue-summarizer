@@ -1,0 +1,28 @@
+# @package postprocessing
+# BASELINE POST-PROCESSING SETTINGS
+
+# ✅ BASELINE TOKEN REMOVAL: Exact match from baseline
+remove_tokens:
+  - "<usr>"
+  - "<s>"      # bos_token from baseline
+  - "</s>"     # eos_token from baseline  
+  - "<pad>"    # pad_token from baseline
+
+# Text cleaning settings
+text_cleaning:
+  strip_whitespace: true
+  normalize_whitespace: true
+  remove_empty_lines: true
+  remove_extra_spaces: true
+  
+# Korean-specific cleaning
+korean_specific:
+  remove_incomplete_hangul: false
+  normalize_punctuation: true
+  remove_special_markers: false  # Keep #Person# tokens
+
+# Advanced cleaning
+advanced:
+  min_length: 1           # Minimal filtering
+  max_repetition_ratio: 0.5
+  remove_repetitive_phrases: false  # Keep it simple like baseline

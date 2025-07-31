@@ -1,7 +1,7 @@
 # @package dataset
 # Dataset configuration for Korean dialogue summarization
 
-# Data paths - UPDATE THIS PATH
+# Data paths
 data_path: "/home/wb2x/workspace/dialogue-summarizer/data"
 
 # File names
@@ -16,21 +16,23 @@ columns:
   id: "fname"
   input: "dialogue"
   target: "summary"
-  topic: "topic"  # Available in train/dev only, used for analysis
+  topic: "topic"
 
-# Data processing
+# ✅ BASELINE DATA PROCESSING: All tokenization settings here
 preprocessing:
   encoding: "utf-8"
-  max_input_length: 512
-  max_target_length: 100
+  
+  # ✅ BASELINE TOKENIZATION: Exact match from working baseline
+  max_input_length: 512     # encoder_max_len from baseline
+  max_target_length: 100    # decoder_max_len from baseline
   truncation: true
-  padding: true
+  padding: true             # ✅ BASELINE: Uses padding=True
   
   # Korean text specific
   normalize_whitespace: true
   remove_extra_newlines: true
   
-  # Special tokens (from baseline)
+  # ✅ BASELINE SPECIAL TOKENS: Exact match
   special_tokens:
     - "#Person1#"
     - "#Person2#"
@@ -39,31 +41,31 @@ preprocessing:
     - "#Address#"
     - "#PassportNumber#"
 
-# Data splits (using provided train/dev split)
-use_provided_split: true
-train_split_ratio: null  # Not used when use_provided_split=true
-val_split_ratio: null
-
-# Data loading
-batch_size: 32
-eval_batch_size: 32  # Batch size for validation and testing
+# ✅ BASELINE BATCH SIZES: Exact match
+batch_size: 50              # per_device_train_batch_size from baseline
+eval_batch_size: 32         # per_device_eval_batch_size from baseline
 shuffle_train: true
 shuffle_val: false
 drop_last: false
 
+# Data splits (using provided train/dev split)
+use_provided_split: true
+train_split_ratio: null
+val_split_ratio: null
+
 # Submission format
 submission:
-  format: "indexed_csv"  # Matches sample_submission.csv
+  format: "indexed_csv"
   columns: ["fname", "summary"]
   include_index: true
-  index_name: ""  # Unnamed index column
+  index_name: ""
 
 # Data validation
 validate_files: true
 check_encoding: true
 sample_size_check: true
 
-# Statistics (will be computed during data loading)
+# Statistics (computed during loading)
 stats:
   train_size: null
   dev_size: null

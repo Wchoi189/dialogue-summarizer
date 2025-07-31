@@ -1,0 +1,100 @@
+# @package training
+# WORKING BASELINE SETTINGS
+
+# Training strategy
+strategy: "auto"
+accelerator: "auto"
+devices: 1
+precision: "16-mixed"  # Matches fp16=True from baseline
+
+# ✅ BASELINE EPOCHS: Match working baseline
+max_epochs: 20
+max_steps: -1
+min_epochs: 1
+
+# ✅ BASELINE BATCH SIZES: Match working baseline
+batch_size: 50          # Matches per_device_train_batch_size
+eval_batch_size: 32     # Matches per_device_eval_batch_size
+accumulate_grad_batches: 1  # Matches gradient_accumulation_steps
+
+# ✅ BASELINE OPTIMIZER: Exact match
+optimizer:
+  name: "adamw"
+  lr: 1e-5              # Exact match from baseline
+  weight_decay: 0.01    # Exact match from baseline
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+# ✅ BASELINE SCHEDULER: Exact match
+lr_scheduler:
+  name: "cosine"        # Matches lr_scheduler_type
+  warmup_ratio: 0.1     # Exact match from baseline
+  warmup_steps: null
+  max_lr: ${training.optimizer.lr}
+  min_lr: 1.0e-7
+
+# Validation and evaluation
+val_check_interval: 1.0
+check_val_every_n_epoch: 1
+evaluation_strategy: "epoch"
+predict_with_generate: true
+
+# ✅ BASELINE GENERATION: Exact match from inference settings
+generation:
+  max_length: 100       # Matches generate_max_length
+  min_length: 1
+  num_beams: 4          # Exact match from baseline
+  no_repeat_ngram_size: 2  # Exact match from baseline
+  early_stopping: true # Exact match from baseline
+  do_sample: false
+  repetition_penalty: 1.0
+  length_penalty: 1.0
+
+# Model saving
+save_strategy: "epoch"
+save_total_limit: 5     # Exact match from baseline
+save_top_k: 3
+monitor: "val/rouge_f"
+mode: "max"
+save_on_train_epoch_end: false
+
+# ✅ BASELINE EARLY STOPPING: Exact match
+early_stopping:
+  enabled: true
+  monitor: "val/rouge_f"
+  patience: 3           # Matches early_stopping_patience
+  min_delta: 0.001      # Matches early_stopping_threshold
+  mode: "max"
+  verbose: true
+
+# Gradient settings
+gradient_clip_val: 1.0
+gradient_clip_algorithm: "norm"
+
+# Logging
+log_every_n_steps: 50
+logging_strategy: "epoch"
+
+# Memory optimization
+dataloader_num_workers: 4
+dataloader_pin_memory: true
+persistent_workers: true
+
+# Mixed precision - matches baseline fp16=True
+amp_backend: "native"
+amp_level: "O1"
+
+# Debugging
+fast_dev_run: false
+overfit_batches: 0.0
+limit_train_batches: 1.0
+limit_val_batches: 1.0
+limit_test_batches: 1.0
+
+# Reproducibility
+deterministic: false
+benchmark: true
+
+# Resume training
+resume_from_checkpoint: null
+auto_resume: false

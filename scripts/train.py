@@ -22,8 +22,8 @@ from pytorch_lightning.loggers import TensorBoardLogger
 
 # --- Configuration (Should be inside a main function) ---
 # Suppress informational messages from the transformers library
-logging.getLogger("transformers").setLevel(logging.ERROR)
-
+from transformers import logging
+logging.set_verbosity_error()
 
 # --- Local Application Imports ---
 # Add project source to the Python path

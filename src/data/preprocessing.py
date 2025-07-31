@@ -22,17 +22,18 @@ logger = logging.getLogger(__name__)
 class DialoguePreprocessor:
     """Enhanced preprocessor for Korean dialogue data."""
     
-    def __init__(self, cfg: DictConfig, tokenizer: PreTrainedTokenizer):
+    def __init__(self, dataset_cfg: DictConfig, tokenizer: PreTrainedTokenizer):
         """
         Initialize preprocessor with configuration and tokenizer.
         
         Args:
-            cfg: Dataset configuration
+            dataset_cfg: Dataset configuration (not full config)
             tokenizer: Pre-trained tokenizer
         """
-        self.cfg = cfg
+        self.dataset_cfg = dataset_cfg
         self.tokenizer = tokenizer
-        self.preprocessing_cfg = cfg.preprocessing
+        # ✅ CHANGE: Use dataset_cfg.preprocessing instead of cfg.preprocessing
+        self.preprocessing_cfg = dataset_cfg.preprocessing
         
         # Add special tokens to tokenizer
         self._setup_special_tokens()
@@ -416,8 +417,8 @@ def create_preprocessor(cfg: DictConfig, model_name: Optional[str] = None) -> Di
     
     ic(f"Loading tokenizer: {model_name}")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    
-    return DialoguePreprocessor(cfg, tokenizer)
+    # ✅ CHANGE: Use dataset config instead of preprocessing config
+    return DialoguePreprocessor(cfg.dataset, tokenizer)  # Changed from cfg to cfg.dataset
 
 
 def preprocess_submission_data(
