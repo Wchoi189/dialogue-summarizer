@@ -9,15 +9,15 @@ dynamo:
 
 # Compilation settings  
 compile:
-  enabled: false
+  enabled: true
   mode: "default"  # "default", "reduce-overhead", "max-autotune"
   dynamic: false
   fullgraph: false
 
 # Performance settings
-float32_matmul_precision: "medium"  # "highest", "high", "medium"
+float32_matmul_precision: "high"  # "highest", "high", "medium"
 cudnn_benchmark: true
 cudnn_deterministic: false
 
 # Memory settings
-empty_cache_steps: 10  # Clear GPU cache every N steps
+empty_cache_steps: 50  # Clear GPU cache every N steps

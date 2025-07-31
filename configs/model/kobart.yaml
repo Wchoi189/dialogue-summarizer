@@ -59,4 +59,4 @@ inference_mode:
 compile:
   enabled: true  # ✅ CHANGE from false
   mode: "default"
-  dynamic: false
+  dynamic: true

@@ -45,7 +45,7 @@ generation:
   max_length: 128
   min_length: 10
   num_beams: 5
-  no_repeat_ngram_size: 2
+  no_repeat_ngram_size: 3
   early_stopping: true
   do_sample: false
   length_penalty: 2.0
@@ -72,11 +72,11 @@ gradient_clip_val: 1.0
 gradient_clip_algorithm: "norm"
 
 # Logging
-log_every_n_steps: 50
+log_every_n_steps: 100
 logging_strategy: "epoch"
 
 # Memory optimization
-dataloader_num_workers: 8  # ◀️ ADJUSTED: 8 is a solid number for a single GPU and your CPU
+dataloader_num_workers: 16  # ◀️ ADJUSTED: 8 is a solid number for a single GPU and your CPU
 dataloader_pin_memory: true
 persistent_workers: true
 
