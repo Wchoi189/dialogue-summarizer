@@ -33,7 +33,30 @@ class ConfigManager:
         """
         self.config_dir = Path(config_dir) if config_dir else self._get_default_config_dir()
         self._hydra_initialized = False
-    
+
+    def load_postprocessing_config(self, config_name: str) -> DictConfig:
+        """
+        Load a specific post-processing configuration.
+        
+        Args:
+            config_name: Name of the post-processing config (e.g., 'validation', 'default')
+            
+        Returns:
+            Post-processing configuration
+        """
+        config_path = self.config_dir / "postprocessing" / f"{config_name}.yaml"
+        
+        if not config_path.exists():
+            raise FileNotFoundError(f"Post-processing config not found: {config_path}")
+        
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        
+        # Remove the @package directive if present
+        if '@package' in config:
+            config.pop('@package')
+        return DictConfig(config)
+
     def _get_default_config_dir(self) -> Path:
         """Get default configuration directory."""
         # Assume we're running from project root or scripts/
@@ -257,3 +280,4 @@ def create_output_dir(cfg: DictConfig) -> Path:
     logger.info(f"Output directory created: {output_dir}")
     
     return output_dir
+

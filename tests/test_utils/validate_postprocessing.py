@@ -2,7 +2,7 @@
 """Test postprocessing configuration"""
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from utils.config_utils import ConfigManager
 from models.kobart_model import KoBARTSummarizationModel

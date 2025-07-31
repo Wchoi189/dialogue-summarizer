@@ -17,15 +17,20 @@ text_cleaning:
   normalize_whitespace: true
   remove_empty_lines: true
   remove_extra_spaces: true
-  
+
+  # ✅ NEW: Clean up extra colons and punctuation
+  clean_extra_colons: true
+  clean_repeated_punctuation: true  
+
 # Korean-specific cleaning
 korean_specific:
-  remove_incomplete_hangul: false
+  remove_special_markers: true   # ✅ REMOVE #Person# for clean output
   normalize_punctuation: true
-  remove_special_markers: false  # Remove #Person1#, etc. from final output
 
 # Advanced cleaning
 # advanced:
-#   min_length: 5           # Minimum output length
-#   max_repetition_ratio: 0.3  # Max ratio of repeated words
-#   remove_repetitive_phrases: false
+#   min_length: 5
+#   max_repetition_ratio: 0.3
+#   remove_repetitive_phrases: true
+#   # ✅ NEW: Clean up dialogue formatting issues
+#   clean_dialogue_artifacts: true

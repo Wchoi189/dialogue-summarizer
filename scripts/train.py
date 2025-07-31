@@ -358,8 +358,8 @@ class DialogueTrainer:
         # Model checkpointing
         checkpoint_callback = ModelCheckpoint(
             dirpath=output_dir / "models",
-            filename="best-{epoch:02d}-{val_rouge_f:.5f}",  # ✅ CHANGED from .4f to .5f
-            monitor=training_cfg.monitor,
+            filename="best-{epoch:02d}-{val_rouge_f:.4f}", 
+            monitor="val/rouge_f",
             mode=training_cfg.mode,
             save_top_k=training_cfg.save_top_k,
             save_last=True,

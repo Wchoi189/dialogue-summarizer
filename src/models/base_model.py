@@ -4,20 +4,21 @@ Provides common functionality for training, validation, and testing.
 """
 
 import logging
+import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Union
-from pytorch_lightning.loggers import WandbLogger
+
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
+import wandb
 from icecream import ic
 from omegaconf import DictConfig
-from torch.optim import AdamW
-from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
-from transformers import get_cosine_schedule_with_warmup
-from evaluation.metrics import RougeCalculator
-import wandb
 from pytorch_lightning.loggers import WandbLogger
+from torch.optim import AdamW
+from transformers import get_cosine_schedule_with_warmup
+
+from evaluation.metrics import RougeCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -26,22 +27,24 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
     """Base class for dialogue summarization models."""
     
     def __init__(self, cfg: DictConfig):
-        """
-        Initialize base model.
-        """
+        """Initialize base model."""
         super().__init__()
         self.cfg = cfg
         self.model_cfg = cfg.model
         self.training_cfg = cfg.training
-        
+
+        # Config manager for dynamic config loading
+        from utils.config_utils import ConfigManager
+        self.config_manager = ConfigManager()
+
         # Save hyperparameters
         self.save_hyperparameters(cfg)
         
-        # MODIFIED: Provide a clear type hint for self.model
+        # Model and tokenizer (to be set by subclasses)
         self.model: Optional[torch.nn.Module] = None
         self.tokenizer = None
 
-        # Ensure model and tokenizer are set up if subclass implements setup methods
+        # Initialize model and tokenizer if subclass implements setup methods
         if hasattr(self, "_setup_model"):
             self._setup_model()
         if hasattr(self, "_setup_tokenizer"):
@@ -51,15 +54,15 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         self.training_metrics = {}
         self.validation_metrics = {}
         
-        # Store validation outputs for epoch end processing (PyTorch Lightning v2.0+)
+        # Store step outputs for epoch end processing
         self.validation_step_outputs = []
         self.test_step_outputs = []
 
         # Generation config
         self.generation_config = self._setup_generation_config()
-       
         self.rouge_calculator = RougeCalculator()
-        ic(f"BaseSummarizationModel initialized")
+        
+        ic("BaseSummarizationModel initialized")
     
     def clear_gpu_memory(self) -> None:
         """Clear GPU memory cache."""
@@ -111,7 +114,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         if num_beams == 1:
             early_stopping = False
         
-        config = {
+        return {
             "max_length": gen_cfg.get("max_length", 50),
             "min_length": gen_cfg.get("min_length", 1),
             "num_beams": num_beams,
@@ -121,24 +124,21 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             "length_penalty": gen_cfg.get("length_penalty", 1.0),
             "repetition_penalty": gen_cfg.get("repetition_penalty", 1.0),
         }
-    
-        return config
 
     def _apply_post_processing(self, text: str) -> str:
-        """
-        Apply post-processing based on dedicated post-processing config.
-        
-        Args:
-            text: Raw decoded text
-            
-        Returns:
-            Post-processed text
-        """
-        # ✅ Get post-processing config from main config
+        """Apply post-processing with debugging."""
         post_cfg = self.cfg.get("postprocessing", {})
         
+        # ✅ DEBUG: Check current config
+        korean_cfg = post_cfg.get("korean_specific", {})
+        remove_markers = korean_cfg.get("remove_special_markers", True)
+        ic(f"Current remove_special_markers setting: {remove_markers}")
+        
         if not post_cfg:
-            return text.strip()  # Basic fallback
+            return text.strip()
+        
+        # ✅ DEBUG: Check input text
+        ic(f"Post-processing input: '{text[:100]}...'")
         
         # 1. Remove unwanted tokens
         remove_tokens = post_cfg.get("remove_tokens", [])
@@ -155,41 +155,20 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             import re
             text = re.sub(r'\s+', ' ', text)
         
-        if text_cleaning.get("remove_empty_lines", True):
-            lines = [line.strip() for line in text.split('\n') if line.strip()]
-            text = ' '.join(lines)
-        
-        if text_cleaning.get("remove_extra_spaces", True):
-            text = ' '.join(text.split())
-        
         # 3. Korean-specific cleaning
-        korean_cfg = post_cfg.get("korean_specific", {})
-        
-        if korean_cfg.get("remove_special_markers", True):
+        if remove_markers:
+            ic("🔥 REMOVING #Person# tokens (remove_special_markers=True)")
             import re
-            # Remove #Person1#, #Person2#, etc.
             text = re.sub(r'#\w+#', '', text)
-            text = ' '.join(text.split())  # Clean up spaces
+            text = ' '.join(text.split())
+        else:
+            ic("✅ KEEPING #Person# tokens (remove_special_markers=False)")
         
-        if korean_cfg.get("normalize_punctuation", True):
-            # Normalize Korean punctuation
-            text = text.replace('。', '.')
-            text = text.replace('，', ',')
-        
-        # 4. Advanced cleaning
-        advanced_cfg = post_cfg.get("advanced", {})
-        
-        # Check minimum length
-        min_length = advanced_cfg.get("min_length", 5)
-        if len(text.strip()) < min_length:
-            return ""  # Return empty if too short
-        
-        # Remove repetitive content
-        if advanced_cfg.get("remove_repetitive_phrases", True):
-            text = self._remove_repetitive_phrases(text, advanced_cfg.get("max_repetition_ratio", 0.3))
+        # ✅ DEBUG: Check output text
+        ic(f"Post-processing output: '{text[:100]}...'")
         
         return text.strip()
-    
+                
     def _remove_repetitive_phrases(self, text: str, max_ratio: float = 0.3) -> str:
         """Remove repetitive phrases from text."""
         words = text.split()
@@ -206,9 +185,8 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         repeated_words = sum(count - 1 for count in word_counts.values() if count > 1)
         repetition_ratio = repeated_words / total_words if total_words > 0 else 0
         
-        # If too repetitive, try to clean it up
+        # If too repetitive, clean it up
         if repetition_ratio > max_ratio:
-            # Simple approach: remove consecutive duplicates
             cleaned_words = []
             prev_word = None
             
@@ -218,9 +196,8 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
                 prev_word = word
             
             return ' '.join(cleaned_words)
-        
         return text
-                
+    
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -230,20 +207,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         labels: Optional[torch.Tensor] = None,
         **kwargs
     ) -> Any:
-        """
-        Forward pass through the model.
-        
-        Args:
-            input_ids: Input token IDs
-            attention_mask: Attention mask for input
-            decoder_input_ids: Decoder input token IDs
-            decoder_attention_mask: Attention mask for decoder
-            labels: Target labels for training
-            **kwargs: Additional arguments
-            
-        Returns:
-            Model outputs
-        """
+        """Forward pass through the model."""
         if self.model is None:
             raise RuntimeError("Model is not initialized. Make sure the subclass sets up 'self.model' in _setup_model().")
         return self.model(
@@ -256,82 +220,54 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         )
     
     def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
-        """
-        Training step.
-        
-        Args:
-            batch: Batch of data
-            batch_idx: Batch index
-            
-        Returns:
-            Loss tensor
-        """
-        # # Log memory before step
-        # if batch_idx % 50 == 0:  # Log every 50 steps
-        #     self.log_gpu_memory(f"Training step {batch_idx} start")
-        # Log only on the first step of the entire training run
+        """Training step."""
+        # Log memory only on the first step
         if self.global_step == 0:
-             self.log_gpu_memory(f"Training step {batch_idx} start")
+            self.log_gpu_memory(f"Training step {batch_idx} start")
+            
         outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
         loss = outputs["loss"]
         
         # Log metrics
         self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
-        
-        # Store metrics
         self.training_metrics["loss"] = loss.item()
         
         # Clear GPU memory periodically
-        if batch_idx % 10 == 0:  # Clear every 10 steps
+        if batch_idx % 10 == 0:
             self.clear_gpu_memory()
         
         return loss
     
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, Any]:
-        """
-        Validation step.
-        
-        Args:
-            batch: Batch of data
-            batch_idx: Batch index
-            
-        Returns:
-            Dictionary with outputs
-        """
-        
+        """Validation step with validation-specific post-processing."""
         if batch_idx == 0:
             self.log_gpu_memory(f"Validation step {batch_idx} start")
         
         # Forward pass for loss calculation
         outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
         loss = outputs["loss"]
-        
-        # Clear memory after forward pass
         self.clear_gpu_memory()
         
-        # Generate predictions for evaluation
+        # Generate predictions
         predictions = self.generate(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"]
         )
-        
-        # Clear memory after generation
         self.clear_gpu_memory()
         
-        # Decode predictions and targets
-        pred_texts = self._decode_predictions(predictions)
-        target_texts = self._decode_targets(batch["labels"])
-        input_texts = self._decode_inputs(batch["input_ids"])
+        # Switch to validation post-processing config
+        original_postprocessing = self._switch_postprocessing_config('validation')
         
-        # DEBUG: Log sample predictions to help debug ROUGE issues
-        if batch_idx == 0:  # Only log first batch to avoid spam
-            ic(f"Input shape: {batch['input_ids'].shape}")
-            ic(f"Predictions shape: {predictions.shape}")
-            ic(f"Sample input: {input_texts[0][:200]}...")
-            ic(f"Sample target: {target_texts[0][:200]}...")
-            ic(f"Sample prediction: {pred_texts[0][:200]}...")
-            ic(f"Prediction length: {len(pred_texts[0])}")
-            ic(f"Target length: {len(target_texts[0])}")
+        try:
+            pred_texts = self._decode_predictions(predictions)
+            target_texts = self._decode_targets(batch["labels"])
+            input_texts = self._decode_inputs(batch["input_ids"])
+        finally:
+            self._restore_postprocessing_config(original_postprocessing)
+        
+        # Debug logging for first batch
+        if batch_idx == 0:
+            self._log_validation_debug(batch, predictions, input_texts, target_texts, pred_texts)
         
         step_output = {
             "loss": loss.detach(),
@@ -341,37 +277,50 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             "sample_ids": batch["sample_ids"]
         }
         
-        # Store outputs for epoch end processing (PyTorch Lightning v2.0+)
         self.validation_step_outputs.append(step_output)
-        
         return step_output
-    
+
+    def _log_validation_debug(self, batch, predictions, input_texts, target_texts, pred_texts):
+        """Log debug information for validation."""
+        ic(f"Input shape: {batch['input_ids'].shape}")
+        ic(f"Predictions shape: {predictions.shape}")
+        ic(f"Sample input: {input_texts[0][:200]}...")
+        ic(f"Sample target: {target_texts[0][:200]}...")
+        ic(f"Sample prediction: {pred_texts[0][:200]}...")
+        ic(f"Prediction length: {len(pred_texts[0])}")
+        ic(f"Target length: {len(target_texts[0])}")
+        
+        # Check if #Person# tokens are preserved
+        person_in_target = "#Person" in target_texts[0]
+        person_in_pred = "#Person" in pred_texts[0]
+        ic(f"✅ #Person# tokens preserved in targets" if person_in_target else "❌ #Person# tokens missing from targets")
+        ic(f"✅ #Person# tokens preserved in predictions" if person_in_pred else "❌ #Person# tokens missing from predictions")
+
     def on_validation_epoch_end(self) -> None:
-        """
-        Process validation epoch end and log a table of predictions to WandB.
-        """
+        """Process validation epoch end and log metrics."""
         outputs = self.validation_step_outputs
         if not outputs:
             return
 
-        
-        assert self.model is not None  # Ensure model is initialized
         avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
         
-        all_predictions, all_targets, all_inputs = [], [], []
+        # Collect all predictions and targets
+        all_predictions = []
+        all_targets = []
+        all_inputs = []
         for output in outputs:
             all_predictions.extend(output["predictions"])
             all_targets.extend(output["targets"])
             all_inputs.extend(output["inputs"])
 
-        # Calculate overall ROUGE scores
+        # Calculate ROUGE scores
         rouge_scores = self.rouge_calculator.calculate_rouge(
             predictions=all_predictions,
             references=all_targets,
             average=True
         )
         
-        # DEBUG: Log sample texts to debug ROUGE issues
+        # Debug logging
         ic(f"Total predictions: {len(all_predictions)}")
         ic(f"Total targets: {len(all_targets)}")
         if all_predictions and all_targets:
@@ -380,68 +329,60 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             ic(f"Prediction empty?: {all_predictions[0] == ''}")
             ic(f"Target empty?: {all_targets[0] == ''}")
         
-        # Log metrics to WandB
+        # Log metrics
         self.log("val/loss", avg_loss, prog_bar=True)
-        self.log_dict({f"val/{k}": v for k, v in rouge_scores.items()}, sync_dist=True)  # type: ignore
+        self.log_dict({f"val/{k}": v for k, v in rouge_scores.items()}, sync_dist=True)
 
-        # ✅ CREATE AND LOG A WANDB TABLE WITH SAMPLE PREDICTIONS
-        # ✅ CREATE AND LOG A WANDB TABLE WITH SAMPLE PREDICTIONS
+        # Log WandB table with sample predictions
+        self._log_wandb_validation_table(all_inputs, all_targets, all_predictions)
+        
+        # Store metrics and cleanup
+        self.validation_metrics = {"loss": avg_loss.item(), **rouge_scores}
+        ic(f"Validation metrics: {self.validation_metrics}")
+        self.validation_step_outputs.clear()
+        self.clear_gpu_memory()
+        self.log_gpu_memory("Validation epoch end")
+
+    def _log_wandb_validation_table(self, all_inputs, all_targets, all_predictions):
+        """Log validation samples to WandB table."""
         try:
             if wandb.run is not None:
-                # STEP 1: Add "ROUGE-2" and "ROUGE-L" to the columns list
                 table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1", "ROUGE-2", "ROUGE-L"])
                 
-                # Take a sample of 5 from the validation set to log
+                # Sample 5 predictions for the table
                 for i in range(min(len(all_predictions), 5)):
                     input_text = all_inputs[i][:100] + "..." if len(all_inputs[i]) > 100 else all_inputs[i]
                     target_text = all_targets[i]
                     pred_text = all_predictions[i]
                     
-                    # Calculate ROUGE for this single sample
+                    # Calculate ROUGE for this sample
                     sample_rouge = self.rouge_calculator.calculate_rouge([pred_text], [target_text])
                     
-                    # STEP 2: Get all three ROUGE f-scores
-                    rouge1_f = sample_rouge.get('rouge1_f', 0.0)
-                    rouge2_f = sample_rouge.get('rouge2_f', 0.0)
-                    rougeL_f = sample_rouge.get('rougeL_f', 0.0)
-
-                    # STEP 3: Add the new scores to the table data
                     table.add_data(
                         self.current_epoch,
                         input_text,
                         target_text,
                         pred_text,
-                        f"{rouge1_f:.4f}",
-                        f"{rouge2_f:.4f}",
-                        f"{rougeL_f:.4f}"
+                        f"{sample_rouge.get('rouge1_f', 0.0):.4f}",
+                        f"{sample_rouge.get('rouge2_f', 0.0):.4f}",
+                        f"{sample_rouge.get('rougeL_f', 0.0):.4f}"
                     )
                 
                 wandb.log({"validation_samples": table})
                 ic("WandB table logged successfully")
         except Exception as e:
             ic(f"WandB logging failed (this is OK): {e}")
-        # Store metrics and clear outputs
-        self.validation_metrics = {"loss": avg_loss.item(), **rouge_scores}
-        ic(f"Validation metrics: {self.validation_metrics}")
-        self.validation_step_outputs.clear()
-        self.clear_gpu_memory()
-        self.log_gpu_memory("Validation epoch end")
     
     def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, Any]:
-        """
-        Test step.
-        """
-        # Forward pass for loss calculation
+        """Test step."""
         outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
         loss = outputs.loss
         
-        # Generate predictions for evaluation
         predictions = self.generate(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"]
         )
         
-        # Decode predictions and targets
         pred_texts = self._decode_predictions(predictions)
         target_texts = self._decode_targets(batch["labels"])
         
@@ -456,16 +397,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         return step_output
     
     def predict_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, Any]:
-        """
-        Prediction step (same as test step).
-        
-        Args:
-            batch: Batch of data
-            batch_idx: Batch index
-            
-        Returns:
-            Dictionary with outputs
-        """
+        """Prediction step (same as test step)."""
         return self.test_step(batch, batch_idx)
     
     def generate(
@@ -474,28 +406,16 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         attention_mask: torch.Tensor,
         **kwargs
     ) -> torch.Tensor:
-        """
-        Generate text using the model.
+        """Generate text using the model."""
+        assert self.model is not None
+        assert self.tokenizer is not None
         
-        Args:
-            input_ids: Input token IDs
-            attention_mask: Attention mask
-            **kwargs: Additional generation arguments
-            
-        Returns:
-            Generated token IDs
-        """
-        assert self.model is not None  # Ensure model is initialized
-        assert self.tokenizer is not None  # Ensure tokenizer is initialized
-        
-        # DEBUG: Log generation parameters occasionally
-        if hasattr(self, '_debug_generation_logged') and not self._debug_generation_logged:
+        # Debug generation parameters once
+        if not hasattr(self, '_debug_generation_logged'):
             ic(f"Generation config: {self.generation_config}")
             ic(f"Input shape: {input_ids.shape}")
             ic(f"Max input length: {input_ids.shape[1]}")
             self._debug_generation_logged = True
-        elif not hasattr(self, '_debug_generation_logged'):
-            self._debug_generation_logged = False
         
         # Merge generation config with kwargs
         gen_kwargs = {**self.generation_config, **kwargs}
@@ -512,54 +432,29 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             )
         
         return outputs
-## Products <unwanted> EOS and PAD tokens
-    # def _decode_predictions(self, predictions: torch.Tensor) -> List[str]:
-    #     """
-    #     Decode prediction token IDs to text.
-        
-    #     Args:
-    #         predictions: Generated token IDs
-            
-    #     Returns:
-    #         List of decoded text strings
-    #     """
-    #     assert self.tokenizer is not None  # Ensure tokenizer is initialized
-    #     decoded = []
-    #     for pred in predictions:
-    #         text = self.tokenizer.decode(
-    #             pred,
-    #             skip_special_tokens=False,
-    #             clean_up_tokenization_spaces=True
-    #         )
-    #         decoded.append(text.strip())
-        
-    #     return decoded
     
-    # def _decode_targets(self, labels: torch.Tensor) -> List[str]:
-    #     """
-    #     Decode target labels to text.
+    def _switch_postprocessing_config(self, config_name: str) -> Optional[DictConfig]:
+        """Temporarily switch to a different post-processing configuration."""
+        original_config = None
         
-    #     Args:
-    #         labels: Target token IDs
+        if hasattr(self.cfg, 'postprocessing'):
+            original_config = self.cfg.postprocessing
             
-    #     Returns:
-    #         List of decoded text strings
-    #     """
-    #     assert self.tokenizer is not None  # Ensure tokenizer is initialized
-    #     # Replace -100 with pad token for decoding
-    #     labels = labels.clone()
-    #     labels[labels == -100] = self.tokenizer.pad_token_id
+            try:
+                new_config = self.config_manager.load_postprocessing_config(config_name)
+                self.cfg.postprocessing = new_config
+                ic(f"✅ Switched to {config_name} post-processing")
+            except FileNotFoundError as e:
+                ic(f"⚠️  Could not load {config_name} config: {e}")
+                ic("Keeping current post-processing config")
         
-    #     decoded = []
-    #     for label in labels:
-    #         text = self.tokenizer.decode(
-    #             label,
-    #             skip_special_tokens=False,
-    #             clean_up_tokenization_spaces=True
-    #         )
-    #         decoded.append(text.strip())
-        
-    #     return decoded
+        return original_config
+
+    def _restore_postprocessing_config(self, original_config: Optional[DictConfig]) -> None:
+        """Restore the original post-processing configuration."""
+        if original_config is not None:
+            self.cfg.postprocessing = original_config
+            ic("✅ Restored original post-processing config")
     
     def _decode_predictions(self, predictions: torch.Tensor) -> List[str]:
         """Decode prediction token IDs to text with post-processing."""
@@ -567,21 +462,18 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         decoded = []
         
         for pred in predictions:
-            # Basic decoding
             text = self.tokenizer.decode(
                 pred,
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=True
             )
-            
-            # ✅ Apply comprehensive post-processing
             text = self._apply_post_processing(text)
             decoded.append(text)
         
         return decoded
 
     def _decode_targets(self, labels: torch.Tensor) -> List[str]:
-        """Decode target labels to text with post-processing."""
+        """Decode target labels to text with minimal processing."""
         assert self.tokenizer is not None
         labels = labels.clone()
         labels[labels == -100] = self.tokenizer.pad_token_id
@@ -594,15 +486,16 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
                 clean_up_tokenization_spaces=True
             )
             
-            # ✅ Apply post-processing to targets too
-            text = self._apply_post_processing(text)
+            # Minimal cleaning: only basic cleanup, keep #Person# tokens
+            text = text.strip()
+            text = ' '.join(text.split())  # Normalize whitespace only
             decoded.append(text)
         
         return decoded
 
     def _decode_inputs(self, input_ids: torch.Tensor) -> List[str]:
         """Decode input token IDs to text."""
-        assert self.tokenizer is not None  # Ensure tokenizer is initialized
+        assert self.tokenizer is not None
         decoded = []
         for inp in input_ids:
             text = self.tokenizer.decode(
@@ -615,7 +508,6 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
 
     def configure_optimizers(self) -> Any:
         """Configure optimizers and learning rate schedulers."""
-        # Setup optimizer
         optimizer_cfg = self.training_cfg.optimizer
         
         if optimizer_cfg.name.lower() == "adamw":
@@ -637,7 +529,6 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             if hasattr(self.trainer, "estimated_stepping_batches"):
                 total_steps = self.trainer.estimated_stepping_batches
             else:
-                # Fallback calculation
                 total_steps = self.training_cfg.max_epochs * 1000  # Rough estimate
             
             warmup_steps = int(total_steps * scheduler_cfg.warmup_ratio)
@@ -675,11 +566,8 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         }
     
     def on_test_epoch_end(self) -> None:
-        """
-        Process test epoch end.
-        """
+        """Process test epoch end."""
         outputs = self.test_step_outputs
-        
         if not outputs:
             return
 
@@ -697,25 +585,23 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             average=True
         )
         
+        # Flatten nested rouge scores
         flat_scores = {}
         for main_key, value_dict in rouge_scores.items():
             if isinstance(value_dict, dict):
                 for sub_key, score in value_dict.items():
-                    # Creates keys like "rouge1_f", "rouge1_p", etc.
                     flat_scores[f"{main_key}_{sub_key}"] = score
             else:
-                # Handles cases where the score is already flat
                 flat_scores[main_key] = value_dict
 
-        # This logs metrics to the history charts
+        # Log metrics to history charts
         self.log_dict(
             {f"eval/{k}": v for k, v in flat_scores.items()},
             sync_dist=True
         )
         
-        # ✅ ADD THIS BLOCK to explicitly save the final metrics to the run summary
+        # Save final metrics to WandB summary
         if self.logger and hasattr(self.logger.experiment, "summary"):
-            # This populates the "Summary" section in the Wandb Overview tab
             self.logger.experiment.summary.update(flat_scores)
 
         ic(f"Final Evaluation metrics: {rouge_scores}")

@@ -1,0 +1,23 @@
+# @package postprocessing
+# Validation post-processing - preserve #Person# tokens
+
+remove_tokens:
+  - "<usr>"
+  - "<s>"
+  - "</s>"
+  - "<pad>"
+  - "<unk>"
+
+text_cleaning:
+  strip_whitespace: true
+  normalize_whitespace: true
+  remove_empty_lines: false
+  remove_extra_spaces: true
+
+korean_specific:
+  remove_special_markers: false  # ✅ KEEP #Person# for fair comparison
+  normalize_punctuation: true
+
+advanced:
+  min_length: 1
+  remove_repetitive_phrases: false

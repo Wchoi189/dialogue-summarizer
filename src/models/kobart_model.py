@@ -133,15 +133,27 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         compile_cfg = self.model_cfg.get("compile", {})
         if compile_cfg.get("enabled", False):
             try:
-                # MODIFIED: Add a # type: ignore comment to suppress the linter error
+                ic("Attempting torch.compile...")
+                
+                # Test different compile modes
+                mode = compile_cfg.get("mode", "default")
+                dynamic = compile_cfg.get("dynamic", False)
+                
+                ic(f"Compile settings: mode={mode}, dynamic={dynamic}")
+                
                 self.model = torch.compile(
                     self.model,
-                    mode=compile_cfg.get("mode", "default"),
-                    dynamic=compile_cfg.get("dynamic", False)
-                )  # type: ignore
-                ic("Model compiled successfully")
+                    mode=mode,
+                    dynamic=dynamic,
+                    fullgraph=compile_cfg.get("fullgraph", False)
+                )
+                ic("✅ torch.compile successful!")
+                
             except Exception as e:
-                logger.warning(f"Model compilation failed: {e}")
+                ic(f"❌ torch.compile failed: {e}")
+                ic("Continuing without compilation...")
+        else:
+            ic("torch.compile disabled in config")
     
     def forward(
         self,
