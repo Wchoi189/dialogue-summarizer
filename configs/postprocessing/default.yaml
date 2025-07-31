@@ -28,9 +28,9 @@ korean_specific:
   normalize_punctuation: true
 
 # Advanced cleaning
-# advanced:
-#   min_length: 5
-#   max_repetition_ratio: 0.3
-#   remove_repetitive_phrases: true
-#   # ✅ NEW: Clean up dialogue formatting issues
-#   clean_dialogue_artifacts: true
+advanced:
+  min_length: 10
+  max_repetition_ratio: 0.3
+  remove_repetitive_phrases: true
+  # ✅ NEW: Clean up dialogue formatting issues
+  clean_dialogue_artifacts: true

@@ -157,7 +157,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         
         # 3. Korean-specific cleaning
         if remove_markers:
-            ic("🔥 REMOVING #Person# tokens (remove_special_markers=True)")
+            # ic("🔥 REMOVING #Person# tokens (remove_special_markers=True)")
             import re
             text = re.sub(r'#\w+#', '', text)
             text = ' '.join(text.split())
@@ -165,7 +165,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             ic("✅ KEEPING #Person# tokens (remove_special_markers=False)")
         
         # ✅ DEBUG: Check output text
-        ic(f"Post-processing output: '{text[:100]}...'")
+        # ic(f"Post-processing output: '{text[:100]}...'")
         
         return text.strip()
                 

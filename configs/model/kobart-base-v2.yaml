@@ -1,0 +1,48 @@
+# @package model
+# Optimized configuration for the gogamza/kobart-base-v2 model
+
+name: "kobart"
+architecture: "bart"
+
+# Model path/name from HuggingFace
+# This is a general-purpose KoBART model, better suited for fine-tuning on dialogue.
+model_name_or_path: "gogamza/kobart-base-v2"
+
+# Model parameters are inherited from the pre-trained model.
+# No overrides are needed.
+parameters:
+  vocab_size: null  # Will be set from tokenizer
+
+# Tokenizer settings
+tokenizer:
+  # The tokenizer must match the model.
+  name_or_path: "gogamza/kobart-base-v2"
+  use_fast: true
+  add_special_tokens: true
+  
+  # Length constraints
+  max_source_length: 512
+  max_target_length: 120
+
+# Model initialization
+init_weights: true
+tie_word_embeddings: true
+
+# Model specific settings for training
+training_mode:
+  # Reduces memory usage at the cost of a small amount of speed. Recommended.
+  gradient_checkpointing: true
+  use_cache: false  # Disable during training for efficiency
+
+# Model specific settings for inference
+inference_mode:
+  use_cache: true
+  output_attentions: false
+  output_hidden_states: false
+
+# Model compilation (PyTorch 2.0+)
+compile:
+  enabled: true
+  mode: "default"
+  # Crucial for handling variable sequence lengths in NLP tasks.
+  dynamic: true

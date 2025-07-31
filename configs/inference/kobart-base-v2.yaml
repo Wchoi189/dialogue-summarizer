@@ -1,0 +1,42 @@
+# @package inference
+# Optimized inference settings for the fine-tuned gogamza/kobart-base-v2 model
+
+# The model path should be a trained checkpoint, but this is a fallback.
+checkpoint_path: null
+model_name_or_path: "gogamza/kobart-base-v2"
+
+# Batch processing
+batch_size: 32
+num_workers: 4
+pin_memory: true
+
+# Generation parameters (tuned from debugging sessions)
+generation:
+  # Length control
+  max_length: 120
+  min_length: 15  # Prevents generating tiny, useless summaries
+
+  # Beam search
+  num_beams: 4
+  
+  # Repetition control (found to be effective during tuning)
+  repetition_penalty: 1.4
+  no_repeat_ngram_size: 3
+  
+  # Early stopping and length penalty
+  early_stopping: true
+  length_penalty: 1.0 # Neutral penalty; does not encourage verbose output
+  
+  # Sampling (disabled for deterministic output)
+  do_sample: false
+
+# Hardware settings for maximum speed
+device: "auto"
+half_precision: true  # Use FP16 for a significant inference speedup
+compile_model: true   # Use torch.compile for another speed boost
+
+# Output settings
+output:
+  save_predictions: true
+  prediction_file: "predictions_v2.csv"
+  submission_file: "submission_v2.csv"

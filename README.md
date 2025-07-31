@@ -28,6 +28,8 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
 3.  **Train Model**
     ```bash
     python scripts/train.py train --config-name config
+    python scripts/train.py train --config-name kobart-base-v2
+    python scripts/train.py train --config-name config
     ```
 
     **Debug training run**
@@ -37,7 +39,7 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
 3.  **Custom Postprocesssing**
     ```bash
     # Use default postprocessing
-    python scripts/train.py train --config-name config
+    python scripts/train.py train --config-name config 
 
     # Use aggressive postprocessing
     python scripts/train.py train --config-name config --override postprocessing=aggressive
@@ -50,6 +52,7 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
 
     # For inference
     python scripts/inference.py submission /path/to/model.ckpt --override postprocessing=aggressive
+    python scripts/inference.py submission /path/to/best/model.ckpt --override postprocessing=aggressive
     ```
 
 4.  **Generate Predictions**

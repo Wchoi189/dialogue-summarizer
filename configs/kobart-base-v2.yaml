@@ -1,0 +1,54 @@
+# @package _global_
+# Main configuration file for dialogue summarization
+
+defaults:
+  - model: kobart-base-v2 
+  - dataset: dialogue_data
+  - training: kobart-base-v2
+  - inference: kobart-base-v2
+  - preprocessing: standard
+  - postprocessing: default
+  - pytorch: default
+  - _self_
+
+# Experiment settings
+experiment_name: "dialogue-summarization-improvements"
+run_name: null  # Auto-generated if null
+seed: 42
+
+# Output directories
+output_dir: "outputs"
+log_dir: "${output_dir}/logs"
+model_dir: "${output_dir}/models"
+prediction_dir: "${output_dir}/predictions"
+
+# Logging configuration
+logging:
+  level: "INFO"
+  use_rich: true
+  file: "${log_dir}/${experiment_name}.log"
+
+# WandB configuration
+wandb:
+  project: "dialogue-summarization(wb2x)"
+  entity: "boot_camp_13_2nd_group_2nd"  # Set your wandb entity
+  username: "wchoi189@gmail.com"
+  name: null  # Let the WandBManager generate the name automatically
+  tags: ["baseline", "kobart"]
+  notes: "Dialogue summarization with KoBART"
+  offline: false
+  log_model: false
+  watch: false
+
+# Hardware settings
+device: "auto"  # auto, cpu, cuda, cuda:0, etc.
+num_workers: 4
+pin_memory: true
+
+# Hydra settings
+hydra:
+  run:
+    dir: "${output_dir}/${now:%Y-%m-%d}/${now:%H-%M-%S}"
+  sweep:
+    dir: "${output_dir}/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}"
+    subdir: "${hydra.job.num}"

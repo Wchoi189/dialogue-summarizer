@@ -89,8 +89,16 @@ class DialogueDataset(Dataset):
         """
         row = self.data.iloc[idx]
         
-        # Get dialogue text
+        # --- Current Logic ---
+        # dialogue = str(row[self.input_col])
+
+        # --- Ideal Logic ---
         dialogue = str(row[self.input_col])
+        # Check if topic column exists and is not null
+        if self.cfg.columns.topic in row and pd.notna(row[self.cfg.columns.topic]):
+            topic = str(row[self.cfg.columns.topic])
+            # Create a new, richer input format
+            dialogue = f"주제: {topic} | 대화: {dialogue}"
         
         # Get summary if available
         summary = None
