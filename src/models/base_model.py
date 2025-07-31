@@ -111,16 +111,116 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         if num_beams == 1:
             early_stopping = False
         
-        return {
+        config = {
             "max_length": gen_cfg.get("max_length", 50),
             "min_length": gen_cfg.get("min_length", 1),
             "num_beams": num_beams,
             "no_repeat_ngram_size": gen_cfg.get("no_repeat_ngram_size", 2),
             "early_stopping": early_stopping,
-            "do_sample": False,
+            "do_sample": gen_cfg.get("do_sample", False),
             "length_penalty": gen_cfg.get("length_penalty", 1.0),
+            "repetition_penalty": gen_cfg.get("repetition_penalty", 1.0),
         }
     
+        return config
+
+    def _apply_post_processing(self, text: str) -> str:
+        """
+        Apply post-processing based on dedicated post-processing config.
+        
+        Args:
+            text: Raw decoded text
+            
+        Returns:
+            Post-processed text
+        """
+        # ✅ Get post-processing config from main config
+        post_cfg = self.cfg.get("postprocessing", {})
+        
+        if not post_cfg:
+            return text.strip()  # Basic fallback
+        
+        # 1. Remove unwanted tokens
+        remove_tokens = post_cfg.get("remove_tokens", [])
+        for token in remove_tokens:
+            text = text.replace(token, "")
+        
+        # 2. Text cleaning
+        text_cleaning = post_cfg.get("text_cleaning", {})
+        
+        if text_cleaning.get("strip_whitespace", True):
+            text = text.strip()
+        
+        if text_cleaning.get("normalize_whitespace", True):
+            import re
+            text = re.sub(r'\s+', ' ', text)
+        
+        if text_cleaning.get("remove_empty_lines", True):
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            text = ' '.join(lines)
+        
+        if text_cleaning.get("remove_extra_spaces", True):
+            text = ' '.join(text.split())
+        
+        # 3. Korean-specific cleaning
+        korean_cfg = post_cfg.get("korean_specific", {})
+        
+        if korean_cfg.get("remove_special_markers", True):
+            import re
+            # Remove #Person1#, #Person2#, etc.
+            text = re.sub(r'#\w+#', '', text)
+            text = ' '.join(text.split())  # Clean up spaces
+        
+        if korean_cfg.get("normalize_punctuation", True):
+            # Normalize Korean punctuation
+            text = text.replace('。', '.')
+            text = text.replace('，', ',')
+        
+        # 4. Advanced cleaning
+        advanced_cfg = post_cfg.get("advanced", {})
+        
+        # Check minimum length
+        min_length = advanced_cfg.get("min_length", 5)
+        if len(text.strip()) < min_length:
+            return ""  # Return empty if too short
+        
+        # Remove repetitive content
+        if advanced_cfg.get("remove_repetitive_phrases", True):
+            text = self._remove_repetitive_phrases(text, advanced_cfg.get("max_repetition_ratio", 0.3))
+        
+        return text.strip()
+    
+    def _remove_repetitive_phrases(self, text: str, max_ratio: float = 0.3) -> str:
+        """Remove repetitive phrases from text."""
+        words = text.split()
+        if len(words) < 4:
+            return text
+        
+        # Count word frequencies
+        word_counts = {}
+        for word in words:
+            word_counts[word] = word_counts.get(word, 0) + 1
+        
+        # Calculate repetition ratio
+        total_words = len(words)
+        repeated_words = sum(count - 1 for count in word_counts.values() if count > 1)
+        repetition_ratio = repeated_words / total_words if total_words > 0 else 0
+        
+        # If too repetitive, try to clean it up
+        if repetition_ratio > max_ratio:
+            # Simple approach: remove consecutive duplicates
+            cleaned_words = []
+            prev_word = None
+            
+            for word in words:
+                if word != prev_word:
+                    cleaned_words.append(word)
+                prev_word = word
+            
+            return ' '.join(cleaned_words)
+        
+        return text
+                
     def forward(
         self,
         input_ids: torch.Tensor,
@@ -461,38 +561,43 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         
     #     return decoded
     
-        def _decode_predictions(self, predictions: torch.Tensor) -> List[str]:
-        """Decode prediction token IDs to text."""
+    def _decode_predictions(self, predictions: torch.Tensor) -> List[str]:
+        """Decode prediction token IDs to text with post-processing."""
         assert self.tokenizer is not None
         decoded = []
+        
         for pred in predictions:
-            # Decode while keeping special tokens like #Person#
+            # Basic decoding
             text = self.tokenizer.decode(
                 pred,
-                skip_special_tokens=False,
+                skip_special_tokens=True,
                 clean_up_tokenization_spaces=True
             )
-            # ✅ Manually remove only the pad and eos tokens for a clean log
-            text = text.replace(self.tokenizer.pad_token, "").replace(self.tokenizer.eos_token, "")
-            decoded.append(text.strip())
+            
+            # ✅ Apply comprehensive post-processing
+            text = self._apply_post_processing(text)
+            decoded.append(text)
+        
         return decoded
-    
+
     def _decode_targets(self, labels: torch.Tensor) -> List[str]:
-        """Decode target labels to text."""
+        """Decode target labels to text with post-processing."""
         assert self.tokenizer is not None
         labels = labels.clone()
         labels[labels == -100] = self.tokenizer.pad_token_id
+        
         decoded = []
         for label in labels:
-            # Decode while keeping special tokens like #Person#
             text = self.tokenizer.decode(
                 label,
-                skip_special_tokens=False,
+                skip_special_tokens=True,
                 clean_up_tokenization_spaces=True
             )
-            # ✅ Manually remove only the pad and eos tokens for a clean log
-            text = text.replace(self.tokenizer.pad_token, "").replace(self.tokenizer.eos_token, "")
-            decoded.append(text.strip())
+            
+            # ✅ Apply post-processing to targets too
+            text = self._apply_post_processing(text)
+            decoded.append(text)
+        
         return decoded
 
     def _decode_inputs(self, input_ids: torch.Tensor) -> List[str]:

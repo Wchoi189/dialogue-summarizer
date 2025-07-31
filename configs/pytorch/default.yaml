@@ -1,0 +1,23 @@
+# @package pytorch
+# PyTorch-specific configuration
+
+# Dynamo settings
+dynamo:
+  cache_size_limit: 256
+  suppress_errors: false
+  verbose: false
+
+# Compilation settings  
+compile:
+  enabled: true
+  mode: "default"  # "default", "reduce-overhead", "max-autotune"
+  dynamic: false
+  fullgraph: false
+
+# Performance settings
+float32_matmul_precision: "medium"  # "highest", "high", "medium"
+cudnn_benchmark: true
+cudnn_deterministic: false
+
+# Memory settings
+empty_cache_steps: 10  # Clear GPU cache every N steps

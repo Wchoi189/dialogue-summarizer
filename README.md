@@ -34,6 +34,23 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     ```bash
     python scripts/train.py train --override training=baseline-debug
     ```
+3.  **Custom Postprocesssing**
+    ```bash
+    # Use default postprocessing
+    python scripts/train.py train --config-name config
+
+    # Use aggressive postprocessing
+    python scripts/train.py train --config-name config --override postprocessing=aggressive
+    
+    # Use minimal postprocessing for debugging
+    python scripts/train.py train --config-name config --override postprocessing=minimal
+
+    # Use custom postprocessing settings via command line
+    python scripts/train.py train --config-name config --override postprocessing.remove_tokens=["<usr>","<pad>"] postprocessing.text_cleaning.strip_whitespace=true
+
+    # For inference
+    python scripts/inference.py submission /path/to/model.ckpt --override postprocessing=aggressive
+    ```
 
 4.  **Generate Predictions**
     ```bash

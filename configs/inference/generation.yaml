@@ -48,20 +48,7 @@ generation:
   output_scores: false
   return_dict_in_generate: true
 
-# Post-processing
-post_processing:
-  # Token removal (matching baseline)
-  remove_tokens:
-    - "<usr>"
-    - "<s>"
-    - "</s>"
-    - "<pad>"
-    - "<unk>"
-  
-  # Text cleaning
-  strip_whitespace: true
-  normalize_whitespace: true
-  remove_empty_lines: true
+# ✅ REMOVED: post_processing section (now in dedicated config)
 
 # Output settings
 output:

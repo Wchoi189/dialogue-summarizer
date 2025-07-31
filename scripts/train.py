@@ -21,25 +21,76 @@ from pytorch_lightning.callbacks import (EarlyStopping, LearningRateMonitor,
 from pytorch_lightning.loggers import TensorBoardLogger
 
 # --- Configuration (Should be inside a main function) ---
-
 # Suppress informational messages from the transformers library
 logging.getLogger("transformers").setLevel(logging.ERROR)
 
-# Increase the torch.compile cache limit to prevent recompilation warnings
-# Note: torch._dynamo is an internal API and may change in future versions.
-if hasattr(torch, "_dynamo") and hasattr(torch._dynamo, "config"):
-    torch._dynamo.config.cache_size_limit = 64
 
 # --- Local Application Imports ---
-
 # Add project source to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 from data.datamodule import DialogueDataModule
 from models.kobart_model import KoBARTSummarizationModel
 from utils.config_utils import ConfigManager
 from utils.logging_utils import ExperimentLogger, setup_logging
 from utils.wandb_utils import WandBManager, WandBMetricsCallback
+
+def setup_pytorch_optimizations(cfg):
+    """
+    Setup PyTorch optimizations from dedicated pytorch config.
+    
+    Args:
+        cfg: Complete configuration including pytorch section
+    """
+    if "pytorch" not in cfg:
+        ic("No pytorch config found, using defaults")
+        return
+    
+    pytorch_cfg = cfg.pytorch
+    ic(f"Applying PyTorch optimizations: {pytorch_cfg}")
+    
+    # 1. Setup Dynamo settings
+    if "dynamo" in pytorch_cfg:
+        dynamo_cfg = pytorch_cfg.dynamo
+        
+        # Cache size limit
+        if "cache_size_limit" in dynamo_cfg:
+            cache_limit = dynamo_cfg.cache_size_limit
+            torch._dynamo.config.cache_size_limit = cache_limit
+            ic(f"✓ Set dynamo cache_size_limit: {cache_limit}")
+        
+        # Error suppression
+        if dynamo_cfg.get("suppress_errors", False):
+            torch._dynamo.config.suppress_errors = True
+            ic("✓ Enabled dynamo error suppression")
+        
+        # Verbose mode
+        if dynamo_cfg.get("verbose", False):
+            torch._dynamo.config.verbose = True
+            ic("✓ Enabled dynamo verbose mode")
+    
+    # 2. Setup compilation settings (stored for later use in model)
+    if "compile" in pytorch_cfg:
+        compile_cfg = pytorch_cfg.compile
+        ic(f"✓ Model compilation config loaded: enabled={compile_cfg.get('enabled', False)}")
+    
+    # 3. Setup performance settings
+    if "float32_matmul_precision" in pytorch_cfg:
+        precision = pytorch_cfg.float32_matmul_precision
+        torch.set_float32_matmul_precision(precision)
+        ic(f"✓ Set float32_matmul_precision: {precision}")
+    
+    # 4. Setup CUDNN settings
+    if pytorch_cfg.get("cudnn_benchmark", True):
+        torch.backends.cudnn.benchmark = True
+        ic("✓ Enabled CUDNN benchmark")
+    
+    if pytorch_cfg.get("cudnn_deterministic", False):
+        torch.backends.cudnn.deterministic = True
+        ic("✓ Enabled CUDNN deterministic mode")
+    
+    # 5. Memory management settings (stored for later use)
+    if "empty_cache_steps" in pytorch_cfg:
+        ic(f"✓ GPU cache clearing every {pytorch_cfg.empty_cache_steps} steps")
 
 class DialogueTrainer:
     """Main trainer class for dialogue summarization."""
@@ -100,7 +151,10 @@ class DialogueTrainer:
             config_name=config_name,
             overrides=overrides
         )
-        
+
+        # ✅ CRITICAL: Setup PyTorch optimizations BEFORE any model/training code
+        setup_pytorch_optimizations(self.cfg)    
+
         # Validate configuration
         self.config_manager.validate_config(self.cfg)
         
@@ -120,7 +174,13 @@ class DialogueTrainer:
         # Setup model
         ic("Setting up model...")
         model = KoBARTSummarizationModel(self.cfg)
-        
+
+        # Apply memory management if configured
+        if hasattr(self.cfg, 'pytorch') and 'empty_cache_steps' in self.cfg.pytorch:
+            self.empty_cache_steps = self.cfg.pytorch.empty_cache_steps
+        else:
+            self.empty_cache_steps = 10  # default
+
         # Ensure model is in training mode
         model.train()
         
@@ -141,6 +201,7 @@ class DialogueTrainer:
         )
         # Log final evaluation
         ic("Starting final evaluation on the best model...")
+        
         # Capture the results from the test run
         test_results = trainer.test(
             model=model,

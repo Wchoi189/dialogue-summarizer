@@ -282,7 +282,7 @@ class DialoguePredictor:
     
     def _post_process_output(self, text: str) -> str:
         """
-        Post-process generated text.
+        Post-process generated text using dedicated config.
         
         Args:
             text: Generated text
@@ -290,26 +290,54 @@ class DialoguePredictor:
         Returns:
             Post-processed text
         """
-        post_cfg = self.inference_cfg.get("post_processing", {})
+        # ✅ Use the same post-processing logic as training
+        post_cfg = self.cfg.get("postprocessing", {})
         
-        # Remove unwanted tokens
+        if not post_cfg:
+            # Fallback to old inference config if post_processing config not found
+            post_cfg = self.inference_cfg.get("postprocessing", {})
+        
+        # Apply the same post-processing logic
+        return self._apply_comprehensive_post_processing(text, post_cfg)
+
+    def _apply_comprehensive_post_processing(self, text: str, post_cfg: dict) -> str:
+        """Apply comprehensive post-processing (same logic as base_model.py)."""
+        
+        # 1. Remove unwanted tokens
         remove_tokens = post_cfg.get("remove_tokens", [])
         for token in remove_tokens:
             text = text.replace(token, "")
         
-        # Clean whitespace
-        if post_cfg.get("strip_whitespace", True):
+        # 2. Text cleaning
+        text_cleaning = post_cfg.get("text_cleaning", {})
+        
+        if text_cleaning.get("strip_whitespace", True):
             text = text.strip()
         
-        if post_cfg.get("normalize_whitespace", True):
+        if text_cleaning.get("normalize_whitespace", True):
             import re
             text = re.sub(r'\s+', ' ', text)
         
-        if post_cfg.get("remove_empty_lines", True):
+        if text_cleaning.get("remove_empty_lines", True):
             lines = [line.strip() for line in text.split('\n') if line.strip()]
             text = ' '.join(lines)
         
-        return text
+        # 3. Korean-specific cleaning
+        korean_cfg = post_cfg.get("korean_specific", {})
+        
+        if korean_cfg.get("remove_special_markers", True):
+            import re
+            text = re.sub(r'#\w+#', '', text)
+            text = ' '.join(text.split())
+        
+        # 4. Advanced cleaning
+        advanced_cfg = post_cfg.get("advanced", {})
+        min_length = advanced_cfg.get("min_length", 5)
+        
+        if len(text.strip()) < min_length:
+            return "요약을 생성할 수 없습니다."  # Korean fallback message
+        
+        return text.strip()
     
     def create_dataloader(self, df: pd.DataFrame) -> DataLoader:
         """

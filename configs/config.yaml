@@ -7,6 +7,8 @@ defaults:
   - training: baseline
   - inference: generation
   - preprocessing: standard
+  - postprocessing: default
+  - pytorch: default
   - _self_
 
 # Experiment settings

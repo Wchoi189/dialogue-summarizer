@@ -1,0 +1,31 @@
+# @package postprocessing
+# Post-processing configuration for text generation
+
+# Token removal settings
+remove_tokens:
+  - "<usr>"
+  - "<s>"
+  - "</s>"
+  - "<pad>"
+  - "<unk>"
+  - "<bos>"
+  - "<eos>"
+
+# Text cleaning settings
+text_cleaning:
+  strip_whitespace: true
+  normalize_whitespace: true
+  remove_empty_lines: true
+  remove_extra_spaces: true
+  
+# Korean-specific cleaning
+korean_specific:
+  remove_incomplete_hangul: false
+  normalize_punctuation: true
+  remove_special_markers: false  # Remove #Person1#, etc. from final output
+
+# Advanced cleaning
+advanced:
+  min_length: 5           # Minimum output length
+  max_repetition_ratio: 0.3  # Max ratio of repeated words
+  remove_repetitive_phrases: false

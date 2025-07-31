@@ -21,7 +21,7 @@ accumulate_grad_batches: 4  # ← INCREASED from 2 to maintain effective batch s
 # Optimizer
 optimizer:
   name: "adamw"
-  lr: 3e-5              # ← INCREASED from 1e-5 (was too low for base model)
+  lr: 1e-5              # ← INCREASED from 1e-5 (was too low for base model)
   weight_decay: 0.01    # ← REDUCED from 0.05
   betas: [0.9, 0.999]
   eps: 1.0e-8

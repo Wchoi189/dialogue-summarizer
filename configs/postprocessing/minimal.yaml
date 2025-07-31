@@ -1,0 +1,19 @@
+# @package postprocessing
+# Minimal post-processing for debugging
+
+remove_tokens:
+  - "<usr>"
+  - "<pad>"
+
+text_cleaning:
+  strip_whitespace: true
+  normalize_whitespace: true
+  remove_empty_lines: false  # Keep for debugging
+  remove_extra_spaces: false
+
+korean_specific:
+  remove_special_markers: false  # Keep #Person1# for debugging
+
+advanced:
+  min_length: 1
+  remove_repetitive_phrases: false

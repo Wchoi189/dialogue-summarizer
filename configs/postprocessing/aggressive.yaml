@@ -1,0 +1,27 @@
+# @package postprocessing
+# Aggressive post-processing for cleaner output
+
+remove_tokens:
+  - "<usr>"
+  - "<s>"
+  - "</s>"
+  - "<pad>"
+  - "<unk>"
+  - "<bos>"
+  - "<eos>"
+
+text_cleaning:
+  strip_whitespace: true
+  normalize_whitespace: true
+  remove_empty_lines: true
+  remove_extra_spaces: true
+
+korean_specific:
+  remove_incomplete_hangul: true
+  normalize_punctuation: true
+  remove_special_markers: true
+
+advanced:
+  min_length: 10          # ✅ Higher minimum length
+  max_repetition_ratio: 0.2  # ✅ Lower repetition tolerance
+  remove_repetitive_phrases: true
