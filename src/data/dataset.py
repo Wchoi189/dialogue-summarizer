@@ -1,3 +1,4 @@
+# FILE: src/data/dataset.py
 """
 PyTorch Dataset classes for dialogue summarization.
 Handles Korean text data with proper tokenization and formatting.
@@ -30,13 +31,6 @@ class DialogueDataset(Dataset):
     ):
         """
         Initialize dataset.
-        
-        Args:
-            data: DataFrame with dialogue data
-            preprocessor: Text preprocessor
-            cfg: Dataset configuration
-            split: Data split name (train, dev, test)
-            is_inference: Whether this is for inference
         """
         self.data = data.copy()
         self.preprocessor = preprocessor
@@ -80,30 +74,20 @@ class DialogueDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
         Get a single sample.
-        
-        Args:
-            idx: Sample index
-            
-        Returns:
-            Dictionary with model inputs
         """
         row = self.data.iloc[idx]
-        
-        # --- Current Logic ---
-        # dialogue = str(row[self.input_col])
-
-        # --- Ideal Logic ---
         dialogue = str(row[self.input_col])
-        # Check if topic column exists and is not null
-        if self.cfg.columns.topic in row and pd.notna(row[self.cfg.columns.topic]):
-            topic = str(row[self.cfg.columns.topic])
-            # Create a new, richer input format
-            dialogue = f"주제: {topic} | 대화: {dialogue}"
+
+        # ✅ FIX: Replacement logic moved to the base class to apply to ALL datasets
+        dialogue = dialogue.replace("#Person1#", "화자1").replace("#Person2#", "화자2").replace("#Person3#", "화자3")
         
-        # Get summary if available
         summary = None
         if not self.is_inference and self.target_col in row:
-            summary = str(row[self.target_col])
+            # Handle cases where summary might be NaN
+            if pd.notna(row[self.target_col]):
+                summary = str(row[self.target_col])
+                # ✅ FIX: Also replace markers in the summary
+                summary = summary.replace("#Person1#", "화자1").replace("#Person2#", "화자2").replace("#Person3#", "화자3")
         
         # Preprocess and tokenize
         inputs = self.preprocessor.prepare_inputs(
@@ -137,11 +121,6 @@ class TrainingDataset(DialogueDataset):
     ):
         """
         Initialize training dataset.
-        
-        Args:
-            data: Training DataFrame
-            preprocessor: Text preprocessor
-            cfg: Dataset configuration
         """
         super().__init__(
             data=data,
@@ -167,11 +146,6 @@ class ValidationDataset(DialogueDataset):
     ):
         """
         Initialize validation dataset.
-        
-        Args:
-            data: Validation DataFrame
-            preprocessor: Text preprocessor
-            cfg: Dataset configuration
         """
         super().__init__(
             data=data,
@@ -197,11 +171,6 @@ class InferenceDataset(DialogueDataset):
     ):
         """
         Initialize inference dataset.
-        
-        Args:
-            data: Test DataFrame
-            preprocessor: Text preprocessor
-            cfg: Dataset configuration
         """
         super().__init__(
             data=data,
@@ -214,35 +183,10 @@ class InferenceDataset(DialogueDataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
         Get a single sample for inference.
-        
-        Args:
-            idx: Sample index
-            
-        Returns:
-            Dictionary with model inputs (no labels)
+        This now automatically uses the corrected logic from the parent DialogueDataset.
         """
-        row = self.data.iloc[idx]
-        dialogue = str(row[self.input_col])
-        
-        # Preprocess and tokenize (no summary for inference)
-        inputs = self.preprocessor.prepare_inputs(
-            dialogue=dialogue,
-            summary=None,
-            is_inference=True
-        )
-        
-        # Convert to tensors
-        tensor_inputs = {}
-        for key, value in inputs.items():
-            if isinstance(value, torch.Tensor):
-                tensor_inputs[key] = value.squeeze(0)
-            else:
-                tensor_inputs[key] = torch.tensor(value)
-        
-        # Add sample ID
-        tensor_inputs["sample_id"] = row[self.id_col]
-        
-        return tensor_inputs
+        # ✅ FIX: Simply call the parent method, as the logic is now there.
+        return super().__getitem__(idx)
 
 class CollateFunction:
     """Fixed collate function for dialogue data."""
@@ -250,10 +194,6 @@ class CollateFunction:
     def __init__(self, tokenizer, is_inference: bool = False):
         """
         Initialize collate function.
-        
-        Args:
-            tokenizer: Tokenizer for padding
-            is_inference: Whether this is for inference
         """
         self.tokenizer = tokenizer
         self.is_inference = is_inference
@@ -261,12 +201,6 @@ class CollateFunction:
     def __call__(self, batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
         """
         Collate batch of samples.
-        
-        Args:
-            batch: List of sample dictionaries
-            
-        Returns:
-            Batched tensors
         """
         # Separate keys
         tensor_keys = ["input_ids", "attention_mask"]
@@ -288,13 +222,13 @@ class CollateFunction:
                 # Ensure all sequences are 1D tensors
                 sequences = [seq.squeeze() if seq.dim() > 1 else seq for seq in sequences]
                 
-                # Determine padding value - THIS IS THE CRITICAL FIX
+                # Determine padding value
                 if key == "labels":
-                    padding_value = -100  # Use -100 directly for labels
+                    padding_value = -100
                 elif key == "input_ids":
                     padding_value = self.tokenizer.pad_token_id or 0
                 else:
-                    padding_value = 0  # For attention masks
+                    padding_value = 0
                 
                 # Pad sequences
                 padded = torch.nn.utils.rnn.pad_sequence(
@@ -304,13 +238,6 @@ class CollateFunction:
                 )
                 
                 batched[key] = padded
-        
-        # ❌ CRITICAL: REMOVE ALL POST-PROCESSING OF LABELS
-        # DO NOT ADD ANYTHING LIKE:
-        # if "labels" in batched:
-        #     labels = batched["labels"]
-        #     labels[labels == self.tokenizer.pad_token_id] = -100
-        #     batched["labels"] = labels
         
         return batched
 
@@ -323,16 +250,6 @@ def create_datasets(
 ) -> Dict[str, Optional[DialogueDataset]]:
     """
     Create datasets for training, validation, and testing.
-    
-    Args:
-        cfg: Dataset configuration
-        preprocessor: Text preprocessor
-        train_data: Training DataFrame (optional)
-        val_data: Validation DataFrame (optional)
-        test_data: Test DataFrame (optional)
-        
-    Returns:
-        Dictionary with dataset instances
     """
     datasets = {}
     
@@ -355,12 +272,5 @@ def create_datasets(
 def create_collate_fn(tokenizer, is_inference: bool = False) -> CollateFunction:
     """
     Create collate function for DataLoader.
-    
-    Args:
-        tokenizer: Tokenizer for padding
-        is_inference: Whether for inference
-        
-    Returns:
-        Collate function instance
     """
     return CollateFunction(tokenizer, is_inference)

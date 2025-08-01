@@ -62,18 +62,18 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
             use_fast=tokenizer_cfg.get("use_fast", True)
         )
         
-        # ✅ CHANGE: Get special tokens from dataset config instead of model config
-        dataset_cfg = self.cfg.dataset
-        additional_tokens = dataset_cfg.preprocessing.get("special_tokens", [])
+        # # ✅ CHANGE: Get special tokens from dataset config instead of model config
+        # dataset_cfg = self.cfg.dataset
+        # additional_tokens = dataset_cfg.preprocessing.get("special_tokens", [])
         
-        if additional_tokens:
-            # Ensure tokens are strings
-            additional_tokens = [str(token) for token in additional_tokens]
+        # if additional_tokens:
+        #     # Ensure tokens are strings
+        #     additional_tokens = [str(token) for token in additional_tokens]
             
-            # ✅ CRITICAL FIX: Add these as regular vocabulary tokens, not special tokens.
-            # This prevents `decode(skip_special_tokens=True)` from removing them.
-            num_added = self.tokenizer.add_tokens(additional_tokens)
-            ic(f"Added {num_added} new tokens to vocabulary: {additional_tokens}")
+        #     # ✅ CRITICAL FIX: Add these as regular vocabulary tokens, not special tokens.
+        #     # This prevents `decode(skip_special_tokens=True)` from removing them.
+        #     num_added = self.tokenizer.add_tokens(additional_tokens)
+        #     # ic(f"Added {num_added} new tokens to vocabulary: {additional_tokens}")
 
         # Verify special tokens
         special_tokens = {
@@ -82,7 +82,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
             "pad_token": self.tokenizer.pad_token,
             "unk_token": self.tokenizer.unk_token,
         }
-        ic(f"Special tokens: {special_tokens}")
+        # ic(f"Special tokens: {special_tokens}")
     
     def _setup_model(self) -> None:
         """Setup KoBART model."""

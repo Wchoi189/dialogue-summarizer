@@ -42,16 +42,17 @@ class DialoguePreprocessor:
     
     def _setup_special_tokens(self) -> None:
         """Setup special tokens in tokenizer."""
-        special_tokens = self.preprocessing_cfg.special_tokens
+        # special_tokens = self.preprocessing_cfg.special_tokens
         
-        if special_tokens:
-            # Ensure special tokens are strings and add them individually
-            special_tokens_list = [str(token) for token in special_tokens]
-            total_added = 0
-            for token in special_tokens_list:
-                num_added = self.tokenizer.add_tokens(token, special_tokens=True)
-                total_added += num_added
-            ic(f"Added {total_added} special tokens: {special_tokens_list}")
+        # if special_tokens:
+        #     # Ensure special tokens are strings and add them individually
+        #     special_tokens_list = [str(token) for token in special_tokens]
+        #     total_added = 0
+        #     for token in special_tokens_list:
+        #         num_added = self.tokenizer.add_tokens(token, special_tokens=True)
+        #         total_added += num_added
+        #     ic(f"Added {total_added} special tokens: {special_tokens_list}")
+        pass
     
     def clean_text(self, text: str) -> str:
         """
@@ -86,33 +87,27 @@ class DialoguePreprocessor:
         return text
     
     def validate_dialogue_format(self, dialogue: str) -> bool:
-        """
-        Validate that dialogue contains proper speaker labels.
-        
-        Args:
-            dialogue: Dialogue text to validate
+            """
+            Validate that dialogue contains proper speaker labels.
+            """
+            if not dialogue:
+                return False
             
-        Returns:
-            True if format is valid
-        """
-        if not dialogue:
-            return False
-        
-        # Check for speaker labels
-        speaker_pattern = r'#Person\d+#'
-        speakers = re.findall(speaker_pattern, dialogue)
-        
-        if not speakers:
-            logger.warning(f"No speaker labels found in dialogue: {dialogue[:100]}...")
-            return False
-        
-        # Should have at least 2 speakers for dialogue
-        unique_speakers = set(speakers)
-        if len(unique_speakers) < 2:
-            logger.warning(f"Less than 2 speakers found: {unique_speakers}")
-            return False
-        
-        return True
+            # ✅ FIX: Update the pattern to look for "화자" (speaker)
+            speaker_pattern = r'화자\d+'
+            speakers = re.findall(speaker_pattern, dialogue)
+            
+            if not speakers:
+                logger.warning(f"No speaker labels found in dialogue: {dialogue[:100]}...")
+                return False
+            
+            # Should have at least 2 speakers for dialogue
+            unique_speakers = set(speakers)
+            if len(unique_speakers) < 2:
+                logger.warning(f"Less than 2 speakers found: {unique_speakers}")
+                return False
+            
+            return True
     
     def preprocess_dialogue(self, dialogue: str) -> str:
         """
@@ -184,7 +179,7 @@ class DialoguePreprocessor:
         dialogue: str,
         summary: Optional[str] = None,
         is_inference: bool = False
-    ) -> Mapping[str, Any]:
+    ) -> BatchEncoding:
         """
         FINAL FIXED: Prepare model inputs from dialogue and summary.
         """
@@ -250,51 +245,36 @@ class DialoguePreprocessor:
         dialogues: List[str],
         summaries: Optional[List[str]] = None,
         is_inference: bool = False
-    ) -> Dict[str, List]:
+    ) -> BatchEncoding:
         """
-        Preprocess a batch of dialogues and summaries.
-        
-        Args:
-            dialogues: List of dialogue texts
-            summaries: List of summary texts (None for inference)
-            is_inference: Whether this is for inference
-            
-        Returns:
-            Dictionary with batched inputs
+        Preprocess a batch of dialogues and summaries using vectorization.
         """
-        batch_size = len(dialogues)
-        ic(f"Preprocessing batch of {batch_size} samples")
+        ic(f"Preprocessing batch of {len(dialogues)} samples")
+
+        # ✅ FIX: Tokenize the entire batch at once
+        processed_dialogues = [self.preprocess_dialogue(d) for d in dialogues]
         
-        # Initialize result containers
-        result = {
-            "input_ids": [],
-            "attention_mask": []
-        }
-        
-        if summaries is not None:
-            result.update({
-                "decoder_input_ids": [],
-                "decoder_attention_mask": [],
-                "labels": []
-            })
-        
-        # Process each sample
-        for i, dialogue in enumerate(dialogues):
-            summary = summaries[i] if summaries else None
-            
-            sample_inputs = self.prepare_inputs(
-                dialogue=dialogue,
-                summary=summary,
-                is_inference=is_inference
+        model_inputs = self.tokenizer(
+            processed_dialogues,
+            max_length=self.preprocessing_cfg.max_input_length,
+            truncation=True,
+            padding=True, # Padding is handled by the tokenizer for the whole batch
+            return_tensors="pt"
+        )
+
+        if summaries is not None and not is_inference:
+            processed_summaries = [self.preprocess_summary(s) for s in summaries]
+            labels = self.tokenizer(
+                processed_summaries,
+                max_length=self.preprocessing_cfg.max_target_length,
+                truncation=True,
+                padding=True, # Padding is handled by the tokenizer for the whole batch
+                return_tensors="pt"
             )
-            
-            # Add to batch
-            for key, value in sample_inputs.items():
-                if key in result:
-                    result[key].append(value)
-        
-        ic(f"Batch preprocessing complete: {len(result['input_ids'])} samples")
-        return result
+            model_inputs['labels'] = labels['input_ids']
+
+        ic(f"Batch preprocessing complete for {len(dialogues)} samples")
+        return model_inputs
 
 
 class DataValidator:

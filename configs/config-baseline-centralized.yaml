@@ -1,0 +1,197 @@
+# @package _global_
+# CENTRALIZED CONFIGURATION - configs/config.yaml
+# Single source of truth for all settings
+
+defaults:
+  - _self_  # This config has highest priority
+  - experiment: baseline  # Load experiment-specific overrides
+
+# =============================================================================
+# EXPERIMENT METADATA
+# =============================================================================
+experiment_name: "dialogue-summarization"
+run_name: null  # Auto-generated
+seed: 42
+
+# =============================================================================
+# DATA CONFIGURATION
+# =============================================================================
+data:
+  # Paths
+  data_path: "/home/wb2x/workspace/dialogue-summarizer/data"
+  files:
+    train: "train.csv"
+    dev: "dev.csv" 
+    test: "test.csv"
+    submission_template: "sample_submission.csv"
+  
+  # Column mappings
+  columns:
+    id: "fname"
+    input: "dialogue"
+    target: "summary"
+    topic: "topic"
+  
+  # Batch settings
+  batch_size: 16
+  eval_batch_size: 32
+  num_workers: 8
+  pin_memory: true
+  shuffle_train: true
+  shuffle_val: false
+  drop_last: false
+
+# =============================================================================
+# MODEL CONFIGURATION  
+# =============================================================================
+model:
+  # Model selection
+  name: "kobart"
+  architecture: "bart"
+  model_name_or_path: "gogamza/kobart-base-v2"
+  
+  # Tokenizer (same as model)
+  tokenizer_name_or_path: "gogamza/kobart-base-v2"
+  use_fast_tokenizer: true
+  
+  # Special tokens for dialogue
+  special_tokens:
+    - "#Person1#"
+    - "#Person2#" 
+    - "#Person3#"
+    - "#Person4#"
+    - "#Person5#"
+  
+  # Model compilation
+  compile:
+    enabled: true
+    mode: "default"
+    dynamic: false
+
+# =============================================================================
+# TEXT PROCESSING CONFIGURATION
+# =============================================================================
+text_processing:
+  # Input/output lengths
+  max_input_length: 512
+  max_target_length: 60  # Shorter for Korean summaries
+  
+  # Tokenization
+  truncation: true
+  padding: false  # Dynamic padding in collate_fn
+  
+  # Text cleaning
+  normalize_whitespace: true
+  remove_extra_newlines: true
+  
+  # Postprocessing
+  remove_tokens: ["<usr>", "<s>", "</s>", "<pad>", "<unk>"]
+  strip_whitespace: true
+  normalize_spaces: true
+
+# =============================================================================
+# TRAINING CONFIGURATION
+# =============================================================================
+training:
+  # Hardware
+  accelerator: "auto"
+  devices: 1
+  precision: "16-mixed"
+  
+  # Epochs and batching
+  max_epochs: 8
+  accumulate_grad_batches: 2
+  
+  # Optimizer
+  optimizer:
+    name: "adamw"
+    lr: 5e-6  # Conservative for pretrained model
+    weight_decay: 0.01
+    betas: [0.9, 0.999]
+    eps: 1e-8
+  
+  # Scheduler
+  lr_scheduler:
+    name: "cosine"
+    warmup_ratio: 0.1
+  
+  # Validation
+  val_check_interval: 1.0
+  check_val_every_n_epoch: 1
+  
+  # Model saving
+  monitor: "val/rouge_f"
+  mode: "max"
+  save_top_k: 2
+  
+  # Early stopping
+  early_stopping:
+    enabled: true
+    patience: 2
+    min_delta: 0.01
+  
+  # Gradient clipping
+  gradient_clip_val: 0.5
+  gradient_clip_algorithm: "norm"
+
+# =============================================================================
+# GENERATION CONFIGURATION (SINGLE SOURCE OF TRUTH)
+# =============================================================================
+generation:
+  # Length control
+  max_length: 60  # Absolute max for Korean
+  min_length: 8   # Minimum meaningful summary
+  
+  # Beam search
+  num_beams: 4
+  early_stopping: true
+  
+  # Quality control
+  no_repeat_ngram_size: 3
+  repetition_penalty: 1.3
+  length_penalty: 0.8  # Favor shorter outputs
+  
+  # Sampling (disabled)
+  do_sample: false
+  temperature: 1.0
+  top_k: 50
+  top_p: 1.0
+
+# =============================================================================
+# EXPERIMENT TRACKING
+# =============================================================================
+wandb:
+  project: "dialogue-summarization(wb2x)"
+  entity: "boot_camp_13_2nd_group_2nd"
+  username: "wchoi189@gmail.com"
+  tags: ["baseline", "kobart", "centralized"]
+  notes: "Centralized config system"
+  offline: false
+  log_model: false
+  watch: false
+
+# =============================================================================
+# OUTPUT DIRECTORIES
+# =============================================================================
+paths:
+  output_dir: "outputs"
+  log_dir: "${paths.output_dir}/logs"
+  model_dir: "${paths.output_dir}/models" 
+  prediction_dir: "${paths.output_dir}/predictions"
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+logging:
+  level: "INFO"
+  use_rich: true
+  file: "${paths.log_dir}/${experiment_name}.log"
+  log_every_n_steps: 50
+
+# =============================================================================
+# PYTORCH SETTINGS
+# =============================================================================
+pytorch:
+  float32_matmul_precision: "medium"
+  cudnn_benchmark: true
+  empty_cache_steps: 50

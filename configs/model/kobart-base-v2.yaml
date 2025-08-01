@@ -4,25 +4,29 @@
 name: "kobart"
 architecture: "bart"
 
-# Model path/name from HuggingFace
-# This is a general-purpose KoBART model, better suited for fine-tuning on dialogue.
-model_name_or_path: "gogamza/kobart-base-v2"
+# ✅ FIX: Change to a summarization-specific model
+model_name_or_path: "digit82/kobart-summarization"
 
-# Model parameters are inherited from the pre-trained model.
-# No overrides are needed.
 parameters:
-  vocab_size: null  # Will be set from tokenizer
+  vocab_size: null
 
-# Tokenizer settings
 tokenizer:
-  # The tokenizer must match the model.
-  name_or_path: "gogamza/kobart-base-v2"
+  # ✅ FIX: Ensure the tokenizer matches the new model
+  name_or_path: "digit82/kobart-summarization"
   use_fast: true
   add_special_tokens: true
   
   # Length constraints
   max_source_length: 512
-  max_target_length: 120
+  max_target_length: 100
+
+  # Repetition control
+  repetition_penalty: 1.4
+  no_repeat_ngram_size: 3
+  
+  # Early stopping and length penalty
+  early_stopping: true
+  length_penalty: 0.8 # ← ADDED to encourage shorter summaries
 
 # Model initialization
 init_weights: true
