@@ -34,7 +34,13 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         
         # Setup model
         self._setup_model()
-        
+
+        # ✅ ACTION: Add this block to process the banned tokens list
+        self.banned_token_ids = []
+        if self.generation_config and "banned_tokens" in self.generation_config:
+            banned_tokens = self.generation_config.pop("banned_tokens")
+            self.banned_token_ids = self.tokenizer.convert_tokens_to_ids(banned_tokens)
+            
         # Add assertions to ensure components are initialized
         assert self.model is not None, "Model not initialized"
         assert self.tokenizer is not None, "Tokenizer not initialized"
@@ -114,10 +120,15 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
                     ic(f"Updated config.{key} = {value}")
         
         # Load the model
-        self.model = BartForConditionalGeneration.from_pretrained(
+        model_obj = BartForConditionalGeneration.from_pretrained(
             model_name,
             config=config
         )
+        # If from_pretrained returns a tuple (model, extra), extract the model
+        if isinstance(model_obj, tuple):
+            self.model = model_obj[0]
+        else:
+            self.model = model_obj
         
         # Configure model for training/inference
         training_mode = self.model_cfg.get("training_mode", {})
@@ -143,7 +154,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
                 
                 ic(f"Compile settings: mode={mode}, dynamic={dynamic}")
                 
-                self.model = torch.compile(
+                self.compiled_model = torch.compile(
                     self.model,
                     mode=mode,
                     dynamic=dynamic,
@@ -165,8 +176,8 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         decoder_attention_mask: Optional[torch.Tensor] = None,
         labels: Optional[torch.Tensor] = None,
         **kwargs
-    ) -> Dict[str, torch.Tensor]:
-        
+         ) -> Dict[str, torch.Tensor]:
+
         """
         Forward pass through KoBART model.
         

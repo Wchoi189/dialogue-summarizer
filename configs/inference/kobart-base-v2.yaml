@@ -13,7 +13,7 @@ pin_memory: true
 # Generation parameters (tuned from debugging sessions)
 generation:
   # Length control
-  max_length: 120
+  max_length: 80
   min_length: 15  # Prevents generating tiny, useless summaries
 
   # Beam search

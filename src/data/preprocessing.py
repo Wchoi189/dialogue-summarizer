@@ -66,6 +66,8 @@ class DialoguePreprocessor:
         """
         if pd.isna(text) or not isinstance(text, str):
             return ""
+        # Handle literal "\\n" characters
+        text = text.replace('\\n', '\n')
         
         # Remove HTML tags if any
         text = re.sub(r'<[^>]+>', '', text)
@@ -251,8 +253,23 @@ class DialoguePreprocessor:
         """
         ic(f"Preprocessing batch of {len(dialogues)} samples")
 
-        # ✅ FIX: Tokenize the entire batch at once
-        processed_dialogues = [self.preprocess_dialogue(d) for d in dialogues]
+    def batch_preprocess(
+        self,
+        dialogues: List[str],
+        summaries: Optional[List[str]] = None,
+        is_inference: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Preprocess a batch of dialogues and summaries using vectorization.
+        """
+        ic(f"Preprocessing batch of {len(dialogues)} samples")
+
+        # ✅ FIX: Add the replacement logic here for inference
+        processed_dialogues = [
+            d.replace("#Person1#", "화자1").replace("#Person2#", "화자2").replace("#Person3#", "화자3") 
+            for d in dialogues
+        ]
+        processed_dialogues = [self.preprocess_dialogue(d) for d in processed_dialogues]
         
         model_inputs = self.tokenizer(
             processed_dialogues,

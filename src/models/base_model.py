@@ -331,7 +331,17 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         
         # Log metrics
         self.log("val/loss", avg_loss, prog_bar=True)
-        self.log_dict({f"val/{k}": v for k, v in rouge_scores.items()}, sync_dist=True)
+        # Flatten any list values to their mean for logging
+        scalar_rouge_scores = {}
+        for k, v in rouge_scores.items():
+            if isinstance(v, list):
+                if len(v) > 0:
+                    scalar_rouge_scores[f"val/{k}"] = float(sum(v)) / len(v)
+                else:
+                    scalar_rouge_scores[f"val/{k}"] = 0.0
+            else:
+                scalar_rouge_scores[f"val/{k}"] = float(v)
+        self.log_dict(scalar_rouge_scores, sync_dist=True)
 
         # Log WandB table with sample predictions
         self._log_wandb_validation_table(all_inputs, all_targets, all_predictions)
