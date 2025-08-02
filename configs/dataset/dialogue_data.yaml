@@ -26,7 +26,7 @@ preprocessing:
   max_input_length: 512     # encoder_max_len from baseline
   max_target_length: 120    # decoder_max_len from baseline
   truncation: true
-  padding: true             # ✅ BASELINE: Uses padding=True
+  padding: true
   
   # Korean text specific
   normalize_whitespace: true

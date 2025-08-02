@@ -92,27 +92,175 @@ class WandBManager:
         details_parts = [model_name, strategy, f"b{batch_size}", f"lr{lr_str}", es_str]
         model_details = "-".join(filter(None, details_parts)) # Filter removes empty strings
 
-        # Final desired format
-        run_name = f"{user_prefix}_(submission)_{model_details}_Rsubmission"
+        # Final desired format - use placeholder that can be replaced later
+        run_name = f"{user_prefix}_(submission)_{model_details}_PLACEHOLDER"
         
         return run_name
-
-    def update_run_name_with_submission_score(self, rouge_score: float):
-        """Updates the name of the finished run with its final ROUGE score."""
+    
+    def finalize_run_name_with_score(self, rouge_score: float):
+        """Replace placeholder with actual score - call this at the end of training."""
         if not (self.logger and self.logger.experiment):
-            ic("WandB logger not initialized, cannot update run name.")
             return
         
         try:
             current_name = self.logger.experiment.name
-            new_name = f"{current_name}-R{rouge_score:.4f}"
-            self.logger.experiment.name = new_name
-            ic(f"Updated WandB run name: {current_name} -> {new_name}")
+            final_name = current_name.replace("_PLACEHOLDER", f"_R{rouge_score:.4f}")
+            
+            # Update all the places where the name should appear
+            experiment = self.logger.experiment
+            
+            # 1. Summary for UI display
+            experiment.summary.update({
+                "final_run_name": final_name,
+                "final_rouge_score": rouge_score,
+                "run_completed": True
+            })
+            
+            # 2. Tags
+            score_tag = f"R{rouge_score:.4f}"
+            current_tags = list(experiment.tags) if experiment.tags else []
+            if score_tag not in current_tags:
+                current_tags.append(score_tag)
+                experiment.tags = current_tags
+            
+            # 3. Config update
+            experiment.config.update({
+                "final_run_name": final_name,
+                "final_score": rouge_score
+            })
+            
+            # 4. Log as metric
+            experiment.log({
+                "final_submission_score": rouge_score,
+                "run_name_finalized": 1
+            })
+            experiment.name = final_name  # Update the run name in WandB
+            ic(f"✅ Finalized run name: {current_name} -> {final_name}")
+            ic(f"   Score: R{rouge_score:.4f}")
+            
         except Exception as e:
-            ic(f"Failed to update WandB run name: {e}")
+            ic(f"❌ Failed to finalize run name: {e}")
 
+    # def update_run_name_with_submission_score(self, rouge_score: float):
+    #     """Updates the run with final ROUGE score using tags and summary."""
+    #     if not (self.logger and self.logger.experiment):
+    #         ic("WandB logger not initialized, cannot update run info.")
+    #         return
+        
+    #     try:
+    #         # Update run summary with final score
+    #         self.logger.experiment.summary["final_rouge_f"] = rouge_score
+            
+    #         # Add final score as a tag
+    #         score_tag = f"R{rouge_score:.4f}"
+    #         current_tags = self.logger.experiment.tags
+            
+    #         # Convert tags to list if it's a tuple or None
+    #         if current_tags is None:
+    #             current_tags = []
+    #         elif isinstance(current_tags, tuple):
+    #             current_tags = list(current_tags)
+    #         elif not isinstance(current_tags, list):
+    #             current_tags = [current_tags] if current_tags else []
+            
+    #         # Add score tag if not already present
+    #         if score_tag not in current_tags:
+    #             current_tags.append(score_tag)
+    #             self.logger.experiment.tags = current_tags
+            
+    #         # Log the final score as a metric
+    #         self.logger.experiment.log({"final_submission_score": rouge_score})
+            
+    #         # Update the run's display name in the summary (this shows in the UI)
+    #         current_name = self.logger.experiment.name
+    #         display_name = f"{current_name}_R{rouge_score:.4f}"
+    #         self.logger.experiment.summary["display_name"] = display_name
+            
+    #         ic(f"Updated WandB run with final score: R{rouge_score:.4f}")
+            
+    #     except Exception as e:
+    #         ic(f"Failed to update WandB run with score: {e}")
+    def update_run_name_with_submission_score(self, rouge_score: float):
+        """Updates the run with final ROUGE score using tags and summary."""
+        if not (self.logger and self.logger.experiment):
+            ic("WandB logger not initialized, cannot update run info.")
+            return
+        
+        try:
+            experiment = self.logger.experiment
+            
+            # 1. Update run summary with final score
+            experiment.summary["final_rouge_f"] = rouge_score
+            
+            # 2. Add final score as a tag (handle tuple/list conversion)
+            score_tag = f"R{rouge_score:.4f}"
+            current_tags = experiment.tags
+            
+            if current_tags is None:
+                current_tags = []
+            elif isinstance(current_tags, tuple):
+                current_tags = list(current_tags)
+            elif not isinstance(current_tags, list):
+                current_tags = [current_tags] if current_tags else []
+            
+            if score_tag not in current_tags:
+                current_tags.append(score_tag)
+                experiment.tags = current_tags
+            
+            # 3. Log the final score as a metric
+            experiment.log({"final_submission_score": rouge_score})
+            
+            # 4. Update display name in summary (this shows in UI)
+            current_name = experiment.name
+            display_name = f"{current_name}_R{rouge_score:.4f}"
+            experiment.summary["display_name"] = display_name
+            experiment.name = display_name  # Update the run name
+            # 5. Try to update the actual run name (this may or may not work)
+            try:
+                import wandb
+                if wandb.run and wandb.run.id == experiment.id:
+                    # Create a new name that replaces the placeholder
+                    new_name = current_name.replace("_Rsubmission", f"_R{rouge_score:.4f}")
+                    wandb.run.name = new_name
+                    ic(f"✅ Successfully updated run name: {current_name} -> {new_name}")
+                else:
+                 ic("⚠️ Could not update run name directly, but summary and tags updated")
+            except Exception as name_error:
+                ic(f"⚠️ Run name update failed (expected): {name_error}")
+            
+            # 6. Add a config entry that shows the final name
+            experiment.config.update({"final_run_name": display_name})
+            
+            ic(f"✅ Updated WandB run with final score: R{rouge_score:.4f}")
+            ic(f"   - Tags: {current_tags}")
+            ic(f"   - Display name: {display_name}")
+            
+        except Exception as e:
+            ic(f"❌ Failed to update WandB run with score: {e}")
+        
     def finish(self):
         """Finishes the WandB run."""
         if wandb.run:
             wandb.finish()
             ic("WandB run finished.")
+
+    def debug_wandb_state(self):
+        """Debug current WandB state."""
+        ic("=== WandB Debug Info ===")
+        ic(f"Logger initialized: {self.logger is not None}")
+        
+        if self.logger:
+            ic(f"Logger type: {type(self.logger)}")
+            ic(f"Experiment available: {hasattr(self.logger, 'experiment')}")
+            
+            if hasattr(self.logger, 'experiment') and self.logger.experiment:
+                ic(f"Run name: {self.logger.experiment.name}")
+                ic(f"Run ID: {self.logger.experiment.id}")
+                ic(f"Project: {self.logger.experiment.project}")
+        
+        # Check wandb module state
+        import wandb
+        ic(f"WandB run active: {wandb.run is not None}")
+        if wandb.run:
+            ic(f"Active run name: {wandb.run.name}")
+            ic(f"Active run ID: {wandb.run.id}")        

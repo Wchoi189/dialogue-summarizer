@@ -149,7 +149,25 @@ class DialogueTrainer:
         model_info = model.get_model_summary()
         ic(f"Model info: {model_info}")
         trainer, checkpoint_callback = self._setup_trainer(output_dir, resume_from)
-        
+
+        ic("=== Logger Debug Info ===")
+        if isinstance(trainer.logger, list):
+            for i, logger in enumerate(trainer.logger):
+                ic(f"Logger {i}: {type(logger).__name__}")
+                if hasattr(logger, 'experiment'):
+                    ic(f"  Experiment type: {type(logger.experiment).__name__}")
+        else:
+            ic(f"Single logger: {type(trainer.logger).__name__}")
+
+        # Debug config loading
+        ic("=== CONFIG DEBUG ===")
+        ic(f"Max epochs from config: {self.cfg.training.max_epochs}")
+        ic(f"Early stopping patience: {self.cfg.training.early_stopping.patience}")
+        ic(f"Early stopping min_delta: {self.cfg.training.early_stopping.min_delta}")
+        ic(f"Experiment config exists: {'experiment' in self.cfg}")
+        if 'experiment' in self.cfg:
+            ic(f"Experiment training config: {self.cfg.experiment.get('training', 'Not found')}")  
+      
         # Train model
         ic("Starting training...")
         trainer.fit(
@@ -167,11 +185,14 @@ class DialogueTrainer:
             best_score = checkpoint_callback.best_model_score
 
         # Update WandB run name with the final score
+        # if self.wandb_manager and best_score is not None:
+        #     rouge_f_score = best_score.item()
+        #     ic(f"Best validation ROUGE-F score: {rouge_f_score:.4f}")
+        #     self.wandb_manager.update_run_name_with_submission_score(rouge_f_score)
         if self.wandb_manager and best_score is not None:
             rouge_f_score = best_score.item()
             ic(f"Best validation ROUGE-F score: {rouge_f_score:.4f}")
-            self.wandb_manager.update_run_name_with_submission_score(rouge_f_score)
-
+            self.wandb_manager.finalize_run_name_with_score(rouge_f_score)
         ic(f"Training completed. Best model: {best_model_path}")
 
         if self.wandb_manager:
@@ -296,14 +317,14 @@ class DialogueTrainer:
         callbacks = []
         
         checkpoint_callback = ModelCheckpoint(
-        dirpath=output_dir / "models",
-        filename="best-{epoch:02d}-val_rouge_f={val/rouge_f:.4f}",
-        monitor="val/rouge_f",
-        mode="max",
-        save_top_k=training_cfg.save_top_k,
-        save_last=True,
-        verbose=True,
-    )
+            dirpath=output_dir / "models",
+            filename="best-{epoch:02d}-val_rouge_f={val/rouge_f:.4f}",
+            monitor="val/rouge_f",
+            mode="max",
+            save_top_k=training_cfg.save_top_k,
+            save_last=True,
+            verbose=True,
+        )
         callbacks.append(checkpoint_callback)
         
         # Early stopping
@@ -321,32 +342,23 @@ class DialogueTrainer:
         lr_monitor = LearningRateMonitor(logging_interval="step")
         callbacks.append(lr_monitor)
         
-        # Progress bar disabled to avoid hanging issues
-        # Uncomment the next two lines if you want to enable progress bar
-        # progress_bar = TQDMProgressBar()
-        # callbacks.append(progress_bar)
-        
-        # WandB callback
-        # if self.wandb_manager:
-        #     wandb_callback = WandBMetricsCallback(self.wandb_manager)
-        #     callbacks.append(wandb_callback)
-        
-        # Setup loggers
+        # Setup loggers - FIXED VERSION
         loggers = []
         
-        # TensorBoard logger
+        # WandB logger FIRST (this makes it the primary logger)
+        if self.wandb_manager:
+            wandb_logger = self.wandb_manager.setup_wandb()
+            loggers.append(wandb_logger)
+            ic(f"✅ WandB logger added: {type(wandb_logger)}")
+        
+        # TensorBoard logger SECOND
         tb_logger = TensorBoardLogger(
             save_dir=output_dir / "logs",
             name="tensorboard",
             version=None
         )
         loggers.append(tb_logger)
-        
-        # WandB logger
-        if self.wandb_manager:
-            wandb_logger = self.wandb_manager.setup_wandb() # Call with no arguments
-            loggers.append(wandb_logger)
-          
+        ic(f"✅ TensorBoard logger added: {type(tb_logger)}")
         
         # Create trainer
         trainer = pl.Trainer(
@@ -366,9 +378,9 @@ class DialogueTrainer:
             val_check_interval=training_cfg.val_check_interval,
             check_val_every_n_epoch=training_cfg.check_val_every_n_epoch,
             
-            # Logging
+            # Logging - PASS THE LIST OF LOGGERS
             log_every_n_steps=training_cfg.get('log_every_n_steps', 50),
-            logger=loggers,
+            logger=loggers,  # This should be the list, not just one logger
             
             # Callbacks
             callbacks=callbacks,
@@ -382,13 +394,19 @@ class DialogueTrainer:
             limit_train_batches=training_cfg.limit_train_batches,
             limit_val_batches=training_cfg.limit_val_batches,
             
-            # Reproducibility - use get() with defaults for missing keys
+            # Reproducibility
             deterministic=training_cfg.get("deterministic", False),
             benchmark=training_cfg.get("benchmark", True),
             
-            # Profiler - use get() with default for missing key
+            # Profiler
             profiler=training_cfg.get("profiler", None),
         )
+        
+        # Debug logger setup
+        ic(f"Trainer loggers: {len(trainer.loggers) if hasattr(trainer, 'loggers') else 'No loggers attr'}")
+        if hasattr(trainer, 'loggers'):
+            for i, logger in enumerate(trainer.loggers):
+                ic(f"Logger {i}: {type(logger).__name__}")
         
         ic("Trainer setup complete")
         return trainer, checkpoint_callback

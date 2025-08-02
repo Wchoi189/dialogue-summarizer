@@ -253,7 +253,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
 
         except Exception as e:
             ic(f"WandB table logging failed: {e}")
-            
+
     def _setup_generation_config(self) -> Dict[str, Any]:
         """Creates the generation config dictionary from the main config."""
         # Use self.cfg.generation as it's a top-level key
@@ -270,20 +270,155 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
     
     def _apply_post_processing(self, text: str, stage: str) -> str:
         """Applies all post-processing steps from the config."""
-        try:
-            post_cfg_name = self.cfg.postprocessing.get(stage, "validation")
-            post_cfg = self.config_manager.load_postprocessing_config(post_cfg_name)
-        except (FileNotFoundError, AttributeError):
-            post_cfg = {}
+        # try:
+        #     post_cfg_name = self.cfg.postprocessing.get(stage, "validation")
+        #     post_cfg = self.config_manager.load_postprocessing_config(post_cfg_name)
+        # except (FileNotFoundError, AttributeError):
+        #     post_cfg = {}
         
-        tokens_to_remove = post_cfg.get("remove_tokens", ["<s>", "</s>", "<pad>"])
-        for token in tokens_to_remove:
+        # tokens_to_remove = post_cfg.get("remove_tokens", ["<s>", "</s>", "<pad>","<usr>"])
+        # for token in tokens_to_remove:
+        #     text = text.replace(token, "")
+
+        # text = text.strip()
+        # text = " ".join(text.split())
+        # return text
+
+            # Get post-processing config
+        post_cfg = self.cfg.get("postprocessing", {})
+        
+        if not post_cfg:
+            # Fallback to basic cleaning if no config
+            text = text.replace("<usr>", "").replace("<s>", "").replace("</s>", "").replace("<pad>", "")
+            return text.strip()
+        
+        # # Use the comprehensive post-processing method
+        return self._apply_comprehensive_post_processing(text, post_cfg)
+    
+    def _apply_comprehensive_post_processing(self, text: str, post_cfg: dict) -> str:
+        """Apply comprehensive post-processing."""
+        
+        # 1. Remove unwanted tokens (including <usr>)
+        remove_tokens = post_cfg.get("remove_tokens", [])
+        # Always remove <usr> token
+        if "<usr>" not in remove_tokens:
+            remove_tokens = remove_tokens + ["<usr>"]
+        
+        for token in remove_tokens:
             text = text.replace(token, "")
+        
+        # 2. Text cleaning
+        text_cleaning = post_cfg.get("text_cleaning", {})
+        
+        if text_cleaning.get("strip_whitespace", True):
+            text = text.strip()
+        
+        if text_cleaning.get("normalize_whitespace", True):
+            import re
+            text = re.sub(r'\s+', ' ', text)
+        
+        if text_cleaning.get("remove_empty_lines", True):
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            text = ' '.join(lines)
+        
+        # 3. Remove repeated phrases (fix the repetitive generation)
+        if text_cleaning.get("remove_repetitive_phrases", True):
+            text = self._remove_repetitive_phrases(text)
+        
+        # 4. Fix incomplete sentences
+        advanced_cfg = post_cfg.get("advanced", {})
+        if advanced_cfg.get("fix_incomplete_sentences", True):
+            text = self._fix_incomplete_sentences(text, advanced_cfg)
+        
+        # 5. Korean-specific cleaning
+        korean_cfg = post_cfg.get("korean_specific", {})
+        
+        # Only remove special markers if explicitly requested (keep #Person# tokens)
+        if korean_cfg.get("remove_special_markers", False):
+            import re
+            # Only remove non-person markers
+            text = re.sub(r'#(?!Person\d+#)\w+#', '', text)
+            text = ' '.join(text.split())
+        
+        # 5. Advanced cleaning
+        advanced_cfg = post_cfg.get("advanced", {})
+        min_length = advanced_cfg.get("min_length", 5)
+        
+        if len(text.strip()) < min_length:
+            return "요약을 생성할 수 없습니다."
+        
+        return text.strip()
 
+    def _remove_repetitive_phrases(self, text: str) -> str:
+        """Remove repetitive phrases from generated text."""
+        sentences = text.split('.')
+        unique_sentences = []
+        seen = set()
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if sentence and sentence not in seen:
+                unique_sentences.append(sentence)
+                seen.add(sentence)
+        
+        return '. '.join(unique_sentences).strip()
+    
+    def _fix_incomplete_sentences(self, text: str, advanced_cfg: dict) -> str:
+        """Fix incomplete sentences by removing them or adding proper endings."""
+        import re
+        
+        # Korean sentence endings that indicate completeness
+        korean_endings = advanced_cfg.get("required_punctuation", 
+                                        [".", "!", "?", "다", "요", "습니다", "니다"])
+        
+        # Check if text ends with proper punctuation or Korean endings
         text = text.strip()
-        text = " ".join(text.split())
+        if not text:
+            return text
+        
+        # Check for proper endings
+        has_proper_ending = False
+        
+        # Check for punctuation
+        if text[-1] in [".", "!", "?"]:
+            has_proper_ending = True
+        
+        # Check for Korean verb/adjective endings
+        # for ending in ["다", "요", "습니다", "니다", "네요", "어요", "아요"]:
+        #     if text.endswith(ending):
+        #         has_proper_ending = True
+        #         break
+        
+        if has_proper_ending:
+            return text
+        
+        # If incomplete, try to fix it
+        # Option 1: Remove the last incomplete sentence
+        sentences = re.split(r'[.!?]', text)
+        if len(sentences) > 1:
+            # Keep all complete sentences, remove the last incomplete one
+            complete_sentences = sentences[:-1]
+            if complete_sentences:
+                # Reconstruct with original punctuation
+                result = ""
+                parts = re.split(r'([.!?])', text)
+                for i in range(0, len(parts)-2, 2):  # Skip the last incomplete part
+                    result += parts[i] + (parts[i+1] if i+1 < len(parts) else "")
+                return result.strip()
+        
+        # Option 2: Add appropriate ending based on context
+        # For Korean, add "습니다" for formal endings
+        # if text.endswith(("합니", "입니", "갑니", "습니")):
+        #     return text + "다."
+        # elif text.endswith(("해", "가", "는", "을", "를", "에", "의")):
+        #     return text + "요."
+        # else:
+        #     # If we can't fix it properly, add a period
+        #     return text + "."
+        
+        # Fallback: if no other condition is met, return the original text.
         return text
-
+    
     def clear_gpu_memory(self):
         """Clears GPU cache."""
         if torch.cuda.is_available():

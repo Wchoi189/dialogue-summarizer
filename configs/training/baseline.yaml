@@ -63,7 +63,7 @@ save_on_train_epoch_end: false
 early_stopping:
   enabled: true
   monitor: "val/rouge_f"
-  patience: 2          # ← REDUCED from 3 - stop early if not improving
+  patience: 7         # ← REDUCED from 3 - stop early if not improving
   min_delta: 0.005     # ← INCREASED from 0.001 - require more significant improvement
   mode: "max"
   verbose: true

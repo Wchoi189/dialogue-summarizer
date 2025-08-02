@@ -12,6 +12,8 @@ from icecream import ic
 
 logger = logging.getLogger(__name__)
 
+# Global rouge scorer instance to avoid repeated initialization
+_rouge_scorer_instance = None
 
 class RougeCalculator:
     """ROUGE metrics calculator with Korean text support."""
@@ -24,23 +26,30 @@ class RougeCalculator:
             use_stemmer: Whether to use stemming (not applicable for Korean)
             lang: Language for text processing
         """
+        global _rouge_scorer_instance
         self.use_stemmer = use_stemmer
         self.lang = lang
         
-        # Try to import rouge-score package
-        try:
-            from rouge_score import rouge_scorer
-            self.rouge_scorer = rouge_scorer.RougeScorer(
-                ['rouge1', 'rouge2', 'rougeL'],
-                use_stemmer=use_stemmer
-            )
+        # Use singleton pattern to avoid repeated initialization
+        if _rouge_scorer_instance is None:
+            # Try to import rouge-score package
+            try:
+                from rouge_score import rouge_scorer
+                _rouge_scorer_instance = rouge_scorer.RougeScorer(
+                    ['rouge1', 'rouge2', 'rougeL'],
+                    use_stemmer=use_stemmer
+                )
+                self.use_rouge_score = True
+                ic("Using rouge-score package (initialized once)")
+                
+            except ImportError:
+                logger.warning("rouge-score package not available, using custom implementation")
+                _rouge_scorer_instance = None
+                self.use_rouge_score = False
+        else:
             self.use_rouge_score = True
-            ic("Using rouge-score package")
-            
-        except ImportError:
-            logger.warning("rouge-score package not available, using custom implementation")
-            self.rouge_scorer = None
-            self.use_rouge_score = False
+        
+        self.rouge_scorer = _rouge_scorer_instance
     
     def calculate_rouge(
         self,

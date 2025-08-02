@@ -8,16 +8,34 @@ remove_tokens:
   - "<pad>"
   - "<unk>"
 
-# text_cleaning:
-#   strip_whitespace: true
-#   normalize_whitespace: true
-#   remove_empty_lines: false
-#   remove_extra_spaces: true
+text_cleaning:
+  strip_whitespace: true
+  normalize_whitespace: true
+  remove_empty_lines: false
+  remove_extra_spaces: true
 
 korean_specific:
   remove_special_markers: false  # ✅ KEEP #Person# for fair comparison
   normalize_punctuation: true
 
+generation:
+  max_length: 45  # Reduced to prevent cutoffs
+  min_length: 15  # Ensure minimum length
+  num_beams: 5
+  repetition_penalty: 1.8
+  no_repeat_ngram_size: 3
+  early_stopping: true
+  length_penalty: 1.5  # Encourage complete sentences
+  
+  # Force proper endings
+  forced_eos_token_id: null  # Let model decide when to end
+  pad_token_id: null
+  eos_token_id: null
+
 advanced:
-  min_length: 1
-  remove_repetitive_phrases: false
+  min_length: 5
+  remove_repetitive_phrases: true
+  # ✅ NEW: Handle incomplete sentences
+  fix_incomplete_sentences: true
+  # required_punctuation: [".", "!", "?", "다", "요", "습니다", "니다"]  # Korean sentence endings
+  required_punctuation: [".", "!", "?"]  # Korean sentence endings
