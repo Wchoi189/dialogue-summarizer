@@ -12,15 +12,15 @@ remove_tokens:
   - "<eos>"
 
 # Text cleaning settings
-text_cleaning:
-  strip_whitespace: true
-  normalize_whitespace: true
-  remove_empty_lines: true
-  remove_extra_spaces: true
+# text_cleaning:
+#   strip_whitespace: true
+#   normalize_whitespace: true
+#   remove_empty_lines: true
+#   remove_extra_spaces: true
 
-  # ✅ NEW: Clean up extra colons and punctuation
-  clean_extra_colons: true
-  clean_repeated_punctuation: true  
+#   # ✅ NEW: Clean up extra colons and punctuation
+#   clean_extra_colons: true
+#   clean_repeated_punctuation: true  
 
 # Korean-specific cleaning
 korean_specific:

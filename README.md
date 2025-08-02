@@ -194,5 +194,9 @@ mkdir outputs/models
 mv outputs/safe_checkpoint/rouge_f=0.4376.ckpt outputs/models/
 rm -r outputs/safe_checkpoint
 ```
+## Clear PyCache
+```bash
+find . -type d -name "__pycache__" -exec rm -rf {} +
+```
 
 ```

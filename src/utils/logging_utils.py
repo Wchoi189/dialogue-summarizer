@@ -307,3 +307,17 @@ class ExperimentLogger:
         log_evaluation_results(results, "final", self.logger)
         self.logger.info(f"Experiment duration: {duration}")
         ic(f"Experiment completed in: {duration}")
+    
+    def get_config_summary(self, cfg: DictConfig) -> Dict[str, Any]:
+        """Get a summary of key configuration parameters."""
+        summary = {
+            "model_name": cfg.get("model", {}).get("name", "unknown"),
+            "dataset_path": cfg.get("dataset", {}).get("data_path", "unknown"),
+            
+            # ✅ CHANGE THIS LINE
+            "batch_size": cfg.get("dataset", {}).get("batch_size", "unknown"),
+            
+            "learning_rate": cfg.get("training", {}).get("optimizer", {}).get("lr", "unknown"),
+            "max_epochs": cfg.get("training", {}).get("max_epochs", "unknown"),
+        }
+        return summary

@@ -8,11 +8,11 @@ remove_tokens:
   - "<pad>"
   - "<unk>"
 
-text_cleaning:
-  strip_whitespace: true
-  normalize_whitespace: true
-  remove_empty_lines: false
-  remove_extra_spaces: true
+# text_cleaning:
+#   strip_whitespace: true
+#   normalize_whitespace: true
+#   remove_empty_lines: false
+#   remove_extra_spaces: true
 
 korean_specific:
   remove_special_markers: false  # ✅ KEEP #Person# for fair comparison

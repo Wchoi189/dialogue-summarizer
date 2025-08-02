@@ -32,7 +32,7 @@ from data.datamodule import DialogueDataModule
 from models.kobart_model import KoBARTSummarizationModel
 from utils.config_utils import ConfigManager
 from utils.logging_utils import ExperimentLogger, setup_logging
-from utils.wandb_utils import WandBManager, WandBMetricsCallback
+from utils.wandb_utils import WandBManager
 
 def setup_pytorch_optimizations(cfg):
     """
@@ -158,38 +158,25 @@ class DialogueTrainer:
             ckpt_path=resume_from
         )
         # Log final evaluation
-        ic("Starting final evaluation on the best model...")
-        
-        # Capture the results from the test run
-        test_results = trainer.test(
-            model=model,
-            dataloaders=datamodule.val_dataloader(), # Use the validation dataloader
-            ckpt_path="best"
-        )
+        best_model_path = "No checkpoint saved."
+        best_score = None
+        # Safely access the checkpoint callback's attributes
+        checkpoint_callback = trainer.checkpoint_callback
+        if isinstance(checkpoint_callback, ModelCheckpoint):
+            best_model_path = checkpoint_callback.best_model_path
+            best_score = checkpoint_callback.best_model_score
 
-        # DYNAMICALLY UPDATE THE RUN NAME
-        if self.wandb_manager and test_results:
-            # The result is a list of dictionaries, so we take the first one
-            final_metrics = test_results[0]
-            # Extract the final overall ROUGE F1-score
-            rouge_f_score = final_metrics.get("eval/rouge_f")
-            if rouge_f_score is not None:
-                ic(f"Updating WandB run name with final ROUGE score: {rouge_f_score:.4f}")
-                self.wandb_manager.update_run_name_with_submission_score(rouge_f_score)
+        # Update WandB run name with the final score
+        if self.wandb_manager and best_score is not None:
+            rouge_f_score = best_score.item()
+            ic(f"Best validation ROUGE-F score: {rouge_f_score:.4f}")
+            self.wandb_manager.update_run_name_with_submission_score(rouge_f_score)
 
-        # Get best model path
-        best_model_path = checkpoint_callback.best_model_path
         ic(f"Training completed. Best model: {best_model_path}")
-        
-        # Log final results
-        assert self.experiment_logger is not None
-        if hasattr(model, "validation_metrics"):
-            self.experiment_logger.log_final_results(model.validation_metrics)
-        
-        # Cleanup
+
         if self.wandb_manager:
             self.wandb_manager.finish()
-        
+            
         return best_model_path
     
     def validate(
@@ -357,11 +344,9 @@ class DialogueTrainer:
         
         # WandB logger
         if self.wandb_manager:
-            wandb_logger = self.wandb_manager.setup_wandb(
-                job_type="training",
-                tags=["training", "kobart"]
-            )
+            wandb_logger = self.wandb_manager.setup_wandb() # Call with no arguments
             loggers.append(wandb_logger)
+          
         
         # Create trainer
         trainer = pl.Trainer(

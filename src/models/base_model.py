@@ -185,11 +185,13 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         all_targets = [t for out in outputs for t in out["targets"]]
         all_inputs = [i for out in outputs for i in out["inputs"]]
 
-        rouge_scores = self.rouge_calculator.calculate_rouge(all_predictions, all_targets)
-        
-        # Filter for scalar metrics before logging
-        scalar_rouge_scores = {k: v for k, v in rouge_scores.items() if not isinstance(v, list)}
-        self.log_dict({f"{stage}/{k}": v for k, v in scalar_rouge_scores.items()})
+       
+        if all_targets:
+            rouge_scores = self.rouge_calculator.calculate_rouge(all_predictions, all_targets)
+            
+            # Filter for scalar metrics before logging
+            scalar_rouge_scores = {k: v for k, v in rouge_scores.items() if not isinstance(v, list)}
+            self.log_dict({f"{stage}/{k}": v for k, v in scalar_rouge_scores.items()})
 
         if stage == "val":
             self._log_wandb_validation_table(all_inputs, all_targets, all_predictions)
@@ -197,28 +199,61 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         outputs.clear()
         self.clear_gpu_memory()
 
-    def _log_wandb_validation_table(self, inputs: List[str], targets: List[str], predictions: List[str]):
-        """Logs a sample of predictions, targets, and metrics to a wandb.Table."""
-        try:
-            if isinstance(self.logger, WandbLogger) and self.logger.experiment:
-                table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1", "ROUGE-2", "ROUGE-L"])
+    # def _log_wandb_validation_table(self, inputs: List[str], targets: List[str], predictions: List[str]):
+    #     """Logs a sample of predictions, targets, and metrics to a wandb.Table."""
+    #     try:
+    #         if isinstance(self.logger, WandbLogger) and self.logger.experiment:
+    #             table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1", "ROUGE-2", "ROUGE-L"])
                 
-                for i in range(min(len(predictions), 5)):
-                    sample_rouge = self.rouge_calculator.calculate_rouge([predictions[i]], [targets[i]])
-                    table.add_data(
-                        self.current_epoch,
-                        inputs[i],
-                        targets[i],
-                        predictions[i],
-                        f"{sample_rouge.get('rouge1_f', 0.0):.4f}",
-                        f"{sample_rouge.get('rouge2_f', 0.0):.4f}",
-                        f"{sample_rouge.get('rougeL_f', 0.0):.4f}"
-                    )
+    #             for i in range(min(len(predictions), 5)):
+    #                 sample_rouge = self.rouge_calculator.calculate_rouge([predictions[i]], [targets[i]])
+    #                 table.add_data(
+    #                     self.current_epoch,
+    #                     inputs[i],
+    #                     targets[i],
+    #                     predictions[i],
+    #                     f"{sample_rouge.get('rouge1_f', 0.0):.4f}",
+    #                     f"{sample_rouge.get('rouge2_f', 0.0):.4f}",
+    #                     f"{sample_rouge.get('rougeL_f', 0.0):.4f}"
+    #                 )
                 
-                self.logger.experiment.log({"validation_samples": table})
-        except Exception as e:
-            ic(f"WandB table logging failed (this is OK): {e}")
+    #             self.logger.experiment.log({"validation_samples": table})
+    #     except Exception as e:
+    #         ic(f"WandB table logging failed (this is OK): {e}")
 
+    def _log_wandb_validation_table(self, inputs: List[str], targets: List[str], predictions: List[str]):
+        """Logs a sample of predictions and metrics to a wandb.Table."""
+        # Ensure we have a WandbLogger and the experiment is running
+        if not isinstance(self.logger, WandbLogger) or not self.logger.experiment:
+            return
+
+        try:
+            table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1", "ROUGE-2", "ROUGE-L"])
+            
+            # Log up to 5 samples from the validation set
+            for i in range(min(len(predictions), 5)):
+                # Calculate ROUGE scores for each individual sample
+                sample_rouge = self.rouge_calculator.calculate_rouge(
+                    predictions=[predictions[i]],
+                    references=[targets[i]]
+                )
+                
+                table.add_data(
+                    self.current_epoch,
+                    inputs[i],
+                    targets[i],
+                    predictions[i],
+                    f"{sample_rouge.get('rouge1_f', 0.0):.4f}",
+                    f"{sample_rouge.get('rouge2_f', 0.0):.4f}",
+                    f"{sample_rouge.get('rougeL_f', 0.0):.4f}"
+                )
+            
+            # Use the PyTorch Lightning logger to correctly log the table
+            self.logger.experiment.log({"validation_samples": table})
+
+        except Exception as e:
+            ic(f"WandB table logging failed: {e}")
+            
     def _setup_generation_config(self) -> Dict[str, Any]:
         """Creates the generation config dictionary from the main config."""
         # Use self.cfg.generation as it's a top-level key
