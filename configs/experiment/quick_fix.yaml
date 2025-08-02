@@ -1,0 +1,60 @@
+# configs/experiment/quick_fix.yaml
+# @package _global_
+# Quick fix experiment to address major performance issues
+
+# Override critical settings for immediate improvement
+training:
+  max_epochs: 8
+  optimizer:
+    lr: 5e-5  # 🔧 INCREASED from 3e-6 for better convergence
+    weight_decay: 0.01
+  
+  early_stopping:
+    patience: 3
+    min_delta: 0.01  # 🔧 INCREASED for more significant improvements
+
+# Fix dataset processing
+dataset:
+  preprocessing:
+    max_input_length: 512
+    max_target_length: 120  # 🔧 INCREASED from 60 for Korean summaries
+  
+  batch_size: 16  # 🔧 REDUCED for better gradients
+  eval_batch_size: 32
+
+# Fix generation parameters  
+generation:
+  max_length: 100  # 🔧 INCREASED from 50 for meaningful summaries
+  min_length: 15   # 🔧 INCREASED minimum length
+  num_beams: 5     # 🔧 More beams for better quality
+  repetition_penalty: 1.4
+  length_penalty: 1.0
+  no_repeat_ngram_size: 3
+  early_stopping: true
+
+# More aggressive postprocessing for Korean
+postprocessing:
+  remove_tokens:
+    - "<usr>"
+    - "<s>"
+    - "</s>"
+    - "<pad>"
+    - "<unk>"
+  
+  text_cleaning:
+    strip_whitespace: true
+    normalize_whitespace: true
+    remove_empty_lines: true
+  
+  korean_specific:
+    remove_special_markers: false  # Keep #Person# for structure
+    normalize_punctuation: true
+  
+  advanced:
+    min_length: 10
+    fix_incomplete_sentences: true
+
+# WandB tracking
+wandb:
+  tags: ["quick_fix", "config_debug", "performance_fix"]
+  notes: "Quick fix for major configuration issues identified in diagnostic"

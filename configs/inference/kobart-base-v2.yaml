@@ -14,7 +14,7 @@ pin_memory: true
 generation:
   # Length control
   max_length: 80
-  min_length: 40  # Prevents generating tiny, useless summaries
+  min_length: 8  # Prevents generating tiny, useless summaries
 
   # Beam search
   num_beams: 4
@@ -25,7 +25,7 @@ generation:
   
   # Early stopping and length penalty
   early_stopping: true
-  length_penalty: 1.0 # Neutral penalty; does not encourage verbose output
+  length_penalty: 0.7 # Neutral penalty; does not encourage verbose output
   
   # Sampling (disabled for deterministic output)
   do_sample: false
