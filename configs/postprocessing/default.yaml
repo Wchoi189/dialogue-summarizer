@@ -24,7 +24,7 @@ text_cleaning:
 
 # Korean-specific cleaning
 korean_specific:
-  remove_special_markers: False   # Required for inference
+  remove_special_markers: false   # Required for inference
   normalize_punctuation: true
 
 # Advanced cleaning

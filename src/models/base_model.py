@@ -58,7 +58,8 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
 
     def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
         """Performs a single training step."""
-        outputs = self.forward(**batch)
+        model_inputs = {k: v for k, v in batch.items() if k != "sample_ids"}
+        outputs = self.forward(**model_inputs)
         loss = outputs["loss"]
         self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
 
@@ -71,7 +72,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
 
     def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
         """Performs a single validation step."""
-        output = self._shared_eval_step(batch, "validation")
+        output = self._shared_eval_step(batch, "val")
         self.validation_step_outputs.append(output)
 
     def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
@@ -144,8 +145,23 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
     def _shared_eval_step(self, batch: Dict[str, torch.Tensor], stage: str) -> Dict[str, Any]:
         """Performs a single evaluation step for either validation or testing."""
         assert self.tokenizer is not None and self.model is not None, "Components must be initialized"
+        
+        model_inputs = {k: v for k, v in batch.items() if k != "sample_ids"}
+        loss = None
+        targets = []
+        
+        # Conditionally handle loss and targets if labels exist
+        if "labels" in batch:
+            outputs = self.forward(**model_inputs)
+            loss = outputs.loss
+            self.log(f"{stage}/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+            
+            labels = batch["labels"]
+            labels[labels == -100] = self.tokenizer.pad_token_id
+            raw_targets = self.tokenizer.batch_decode(labels, skip_special_tokens=False)
+            targets = [self._apply_post_processing(text, stage=stage) for text in raw_targets]
 
-        # --- Generate predictions (always happens) ---
+        # Generate predictions
         generated_tokens = self.model.generate(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
@@ -154,61 +170,51 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         raw_preds = self.tokenizer.batch_decode(generated_tokens, skip_special_tokens=False)
         predictions = [self._apply_post_processing(text, stage=stage) for text in raw_preds]
 
-        # --- Conditionally handle loss and targets if labels exist ---
-        loss = None
-        targets = []
-        if "labels" in batch:
-            # 1. Calculate loss
-            outputs = self.forward(**batch)
-            loss = outputs.loss
-            self.log(f"{stage}/loss", loss, on_epoch=True, prog_bar=True)
-            
-            # 2. Decode and clean targets
-            labels = batch["labels"]
-            labels[labels == -100] = self.tokenizer.pad_token_id
-            raw_targets = self.tokenizer.batch_decode(labels, skip_special_tokens=False)
-            targets = [self._apply_post_processing(text, stage=stage) for text in raw_targets]
+        # Decode inputs for logging purposes
+        raw_inputs = self.tokenizer.batch_decode(batch["input_ids"], skip_special_tokens=False)
+        inputs = [self._apply_post_processing(text, stage=stage) for text in raw_inputs]
 
-        return {"loss": loss, "predictions": predictions, "targets": targets}
+        return {"loss": loss, "predictions": predictions, "targets": targets, "inputs": inputs}
 
     def _on_eval_epoch_end(self, outputs: List[Dict], stage: str):
         """Centralized logic for processing epoch-end outputs."""
         if not outputs:
             return
 
-        avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
-        self.log(f"{stage}/loss", avg_loss, prog_bar=True)
-
         all_predictions = [p for out in outputs for p in out["predictions"]]
         all_targets = [t for out in outputs for t in out["targets"]]
+        all_inputs = [i for out in outputs for i in out["inputs"]]
 
         rouge_scores = self.rouge_calculator.calculate_rouge(all_predictions, all_targets)
         
-        loggable_scores = {}
-        for k, v in rouge_scores.items():
-            if isinstance(v, list):
-                # If a list is returned (e.g., per-instance scores), log the mean
-                loggable_scores[f"{stage}/{k}"] = torch.tensor(v).mean().item()
-            else:
-                loggable_scores[f"{stage}/{k}"] = float(v)
+        # Filter for scalar metrics before logging
+        scalar_rouge_scores = {k: v for k, v in rouge_scores.items() if not isinstance(v, list)}
+        self.log_dict({f"{stage}/{k}": v for k, v in scalar_rouge_scores.items()})
 
-        self.log_dict(loggable_scores)
-
-        # Log a sample table to WandB for the validation stage
         if stage == "val":
-            self._log_wandb_validation_table(all_targets, all_predictions)
+            self._log_wandb_validation_table(all_inputs, all_targets, all_predictions)
         
-        outputs.clear() # Free up memory
+        outputs.clear()
         self.clear_gpu_memory()
 
-    def _log_wandb_validation_table(self, targets: List[str], predictions: List[str]):
-        """Logs a sample of predictions to a wandb.Table."""
+    def _log_wandb_validation_table(self, inputs: List[str], targets: List[str], predictions: List[str]):
+        """Logs a sample of predictions, targets, and metrics to a wandb.Table."""
         try:
-            # ✅ ADD THIS CHECK
             if isinstance(self.logger, WandbLogger) and self.logger.experiment:
-                table = wandb.Table(columns=["Epoch", "Ground Truth", "Prediction"])
+                table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1", "ROUGE-2", "ROUGE-L"])
+                
                 for i in range(min(len(predictions), 5)):
-                    table.add_data(self.current_epoch, targets[i], predictions[i])
+                    sample_rouge = self.rouge_calculator.calculate_rouge([predictions[i]], [targets[i]])
+                    table.add_data(
+                        self.current_epoch,
+                        inputs[i],
+                        targets[i],
+                        predictions[i],
+                        f"{sample_rouge.get('rouge1_f', 0.0):.4f}",
+                        f"{sample_rouge.get('rouge2_f', 0.0):.4f}",
+                        f"{sample_rouge.get('rougeL_f', 0.0):.4f}"
+                    )
+                
                 self.logger.experiment.log({"validation_samples": table})
         except Exception as e:
             ic(f"WandB table logging failed (this is OK): {e}")
@@ -230,7 +236,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
     def _apply_post_processing(self, text: str, stage: str) -> str:
         """Applies all post-processing steps from the config."""
         try:
-            post_cfg_name = self.cfg.postprocessing.get(stage, "default")
+            post_cfg_name = self.cfg.postprocessing.get(stage, "validation")
             post_cfg = self.config_manager.load_postprocessing_config(post_cfg_name)
         except (FileNotFoundError, AttributeError):
             post_cfg = {}

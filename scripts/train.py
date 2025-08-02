@@ -340,9 +340,9 @@ class DialogueTrainer:
         # callbacks.append(progress_bar)
         
         # WandB callback
-        if self.wandb_manager:
-            wandb_callback = WandBMetricsCallback(self.wandb_manager)
-            callbacks.append(wandb_callback)
+        # if self.wandb_manager:
+        #     wandb_callback = WandBMetricsCallback(self.wandb_manager)
+        #     callbacks.append(wandb_callback)
         
         # Setup loggers
         loggers = []
