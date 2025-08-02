@@ -42,30 +42,22 @@ class DialoguePreprocessor:
     
     def _setup_special_tokens(self) -> None:
         """
-        Safely adds special tokens from the configuration to the tokenizer.
-        This method is backward-compatible and will not fail if the key is missing or empty.
+        Safely adds additional tokens (like #Person1#) to the tokenizer's
+        regular vocabulary.
         """
-        # 1. Safely get the list of tokens, defaulting to an empty list if the key is missing.
-        special_tokens_list = self.preprocessing_cfg.get("special_tokens", [])
+        additional_tokens = self.preprocessing_cfg.get("special_tokens", [])
 
-        # 2. Guard clause: If there are no tokens to add, exit the method early.
-        if not special_tokens_list:
+        if not additional_tokens:
             return
 
-        # 3. Ensure all provided tokens are strings before adding them.
-        special_tokens_list = [str(token) for token in special_tokens_list]
+        # ✅ Use add_tokens instead of add_special_tokens
+        num_added = self.tokenizer.add_tokens([str(t) for t in additional_tokens])
 
-        # 4. Add the tokens as "special tokens" to prevent the tokenizer from splitting them.
-        num_added = self.tokenizer.add_special_tokens(
-            {'additional_special_tokens': special_tokens_list}
-        ) # type: ignore
-
-        # 5. Log a helpful message only if new tokens were actually added to the vocabulary.
         if num_added > 0:
-            ic(f"Added {num_added} new special tokens to the tokenizer: {special_tokens_list}")
+            ic(f"Added {num_added} new tokens to the tokenizer vocabulary.")
         else:
-            ic("Special tokens already exist in the tokenizer vocabulary.")
-    
+            ic("No new tokens were added to the tokenizer vocabulary.")
+            
     def clean_text(self, text: str) -> str:
         """
         Clean Korean dialogue text.

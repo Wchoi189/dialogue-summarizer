@@ -86,24 +86,6 @@ model:
 # =============================================================================
 # TEXT PROCESSING CONFIGURATION
 # =============================================================================
-# text_processing:
-#   # Input/output lengths
-#   max_input_length: 512
-#   max_target_length: 80  # Shorter for Korean summaries
-  
-#   # Tokenization
-#   truncation: true
-#   padding: false  # Dynamic padding in collate_fn
-  
-#   # Text cleaning
-#   normalize_whitespace: true
-#   remove_extra_newlines: true
-  
-#   # Postprocessing
-#   remove_tokens: ["<usr>", "<s>", "</s>", "<pad>", "<unk>"]
-#   strip_whitespace: true
-#   normalize_spaces: true
-
 
 ## Moved to DATA CONFIGURATION
 
@@ -141,7 +123,7 @@ training:
   # Model saving
   monitor: "val/rouge_f"
   mode: "max"
-  save_top_k: 3
+  save_top_k: 1
   
   # Early stopping
   early_stopping:

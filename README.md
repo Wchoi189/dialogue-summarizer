@@ -88,7 +88,7 @@ dialogue\_summarization/
 ├── notebooks/        \# Jupyter notebooks
 └── tests/            \# Unit tests
 
-```
+```markdown
 
 ## 🛠️ Configuration
 
@@ -111,3 +111,88 @@ Current baseline: **ROUGE-F1: 47.1244**
 ## 📈 Experiment Tracking
 
 Integration with Weights & Biases for experiment tracking and model versioning.
+```
+
+```markdown
+That's an excellent job running the commands. The output is very revealing and points to a single, critical error in your configuration that has caused the massive 59GB of storage usage.
+
+The root cause is a forward slash (`/`) in your checkpoint filename. Your system is interpreting it as a directory separator, creating a new 9.7GB directory for almost every checkpoint instead of a single 1.4GB file.
+
+-----
+
+### The Root Cause: A Slash in the Filename
+
+In your `scripts/train.py` file, the `ModelCheckpoint` is configured with this filename: `"best-{epoch:02d}-{val/rouge_f:.4f}"`.
+
+The `{val/rouge_f}` part is the problem. The `/` causes the system to create a directory named `best-epoch=02-val` and then save the checkpoint inside it. This has been happening repeatedly, filling up your disk.
+
+-----
+
+### Step 1: Fix the Code (Permanent Solution)
+
+First, let's fix the filename to prevent this from ever happening again.
+
+  * **File to Edit**: `scripts/train.py`
+  * **Action**: In the `_setup_trainer` method, change the `/` in the `ModelCheckpoint` filename to a more filename-friendly character like `=` or `_`.
+
+<!-- end list -->
+
+```python
+# In scripts/train.py -> _setup_trainer()
+
+# --- BEFORE ---
+# checkpoint_callback = ModelCheckpoint(
+#     dirpath=output_dir / "models",
+#     filename="best-{epoch:02d}-{val/rouge_f:.4f}",
+#     ...
+# )
+
+# --- AFTER ---
+checkpoint_callback = ModelCheckpoint(
+    dirpath=output_dir / "models",
+    filename="best-{epoch:02d}-val_rouge_f={val/rouge_f:.4f}", # ✅ Corrected filename
+    monitor="val/rouge_f",
+    mode="max",
+    save_top_k=1, # Also recommend setting this to 1 to save only the best
+    save_last=True,
+    verbose=True,
+)
+```
+
+-----
+
+### Step 2: Clean Up the Existing Training Files
+
+Now, let's reclaim your disk space. Your `find` command shows that your best-performing checkpoint so far is `best-epoch=03-val/rouge_f=0.4376.ckpt`. We will save that single file and delete everything else.
+
+Run these commands from your `dialogue-summarizer` directory:
+
+**1. Create a safe temporary directory**
+
+```bash
+mkdir -p outputs/safe_checkpoint
+```
+
+**2. Move your single best checkpoint to safety**
+
+```bash
+mv outputs/models/best-epoch=03-val/rouge_f=0.4376.ckpt outputs/safe_checkpoint/
+```
+
+**3. Delete the entire 59GB `models` directory**
+
+> **WARNING**: This command will permanently delete the `outputs/models` directory and all of its contents. Double-check that you have moved your best checkpoint first.
+
+```bash
+rm -rf outputs/models
+```
+
+**4. Recreate the directory and move the best checkpoint back**
+
+```bash
+mkdir outputs/models
+mv outputs/safe_checkpoint/rouge_f=0.4376.ckpt outputs/models/
+rm -r outputs/safe_checkpoint
+```
+
+```

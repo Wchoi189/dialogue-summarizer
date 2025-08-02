@@ -308,16 +308,15 @@ class DialogueTrainer:
         # Setup callbacks
         callbacks = []
         
-        # Model checkpointing
         checkpoint_callback = ModelCheckpoint(
-            dirpath=output_dir / "models",
-            filename="best-{epoch:02d}-{val/rouge_f:.4f}", 
-            monitor="val/rouge_f",
-            mode=training_cfg.mode,
-            save_top_k=training_cfg.save_top_k,
-            save_last=True,
-            verbose=True,
-        )
+        dirpath=output_dir / "models",
+        filename="best-{epoch:02d}-val_rouge_f={val/rouge_f:.4f}",
+        monitor="val/rouge_f",
+        mode="max",
+        save_top_k=training_cfg.save_top_k,
+        save_last=True,
+        verbose=True,
+    )
         callbacks.append(checkpoint_callback)
         
         # Early stopping

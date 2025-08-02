@@ -17,7 +17,7 @@ text_cleaning:
   clean_repeated_punctuation: true
 
 korean_specific:
-  remove_special_markers: true
+  remove_special_markers: False
   normalize_punctuation: true
 
 advanced:

@@ -11,8 +11,8 @@ training:
     lr: 5e-6
 
 generation:
-  max_length: 60
-  repetition_penalty: 1.3
+  max_length: 50
+  repetition_penalty: 1.4
 
 wandb:
   tags: ["baseline", "kobart", "conservative"]
