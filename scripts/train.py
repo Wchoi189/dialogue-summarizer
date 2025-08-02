@@ -104,74 +104,35 @@ class DialogueTrainer:
     
     def train(
         self,
-        config_name: str = "config",
-        config_path: Optional[str] = None,
+        config_name: str,
         overrides: Optional[List[str]] = None,
         resume_from: Optional[str] = None,
-        fast_dev_run: bool = False,
-        max_epochs: Optional[int] = None,
-        batch_size: Optional[int] = None,
-        learning_rate: Optional[float] = None
     ) -> str:
         """
         Train dialogue summarization model.
-        
-        Args:
-            config_name: Name of config file (without .yaml)
-            config_path: Custom path to config directory
-            overrides: List of config overrides
-            resume_from: Path to checkpoint to resume from
-            fast_dev_run: Run one batch for debugging
-            max_epochs: Override max epochs
-            batch_size: Override batch size
-            learning_rate: Override learning rate
-            
-        Returns:
-            Path to best model checkpoint
         """
         ic(f"Starting training with config: {config_name}")
         
-        # Set config directory if provided
-        if config_path:
-            self.config_manager = ConfigManager(config_path)
-        
-        # Build overrides from arguments
-        overrides = overrides or []
-        if fast_dev_run:
-            overrides.append("training.fast_dev_run=true")
-        if max_epochs is not None:
-            overrides.append(f"training.max_epochs={max_epochs}")
-        if batch_size is not None:
-            overrides.append(f"dataset.batch_size={batch_size}")
-        if learning_rate is not None:
-            overrides.append(f"training.optimizer.lr={learning_rate}")
-        
-        # Load configuration
+        # Load configuration using the provided name and overrides
         self.cfg = self.config_manager.load_config(
             config_name=config_name,
-            overrides=overrides
+            overrides=overrides or []
         )
 
-        # ✅ CRITICAL: Setup PyTorch optimizations BEFORE any model/training code
+        # CRITICAL: Setup PyTorch optimizations BEFORE any model/training code
         setup_pytorch_optimizations(self.cfg)    
 
         # Validate configuration
         self.config_manager.validate_config(self.cfg)
         
-        # Setup logging
+        # Setup logging, tracking, and directories
         setup_logging(self.cfg)
-        
-        # Setup experiment tracking
         self._setup_experiment_tracking()
-        
-        # Create output directories
         output_dir = self._create_output_directories()
         
-        # Setup data
         ic("Setting up data module...")
         datamodule = DialogueDataModule(self.cfg)
         
-        # Setup model
         ic("Setting up model...")
         model = KoBARTSummarizationModel(self.cfg)
 
@@ -184,13 +145,10 @@ class DialogueTrainer:
         # Ensure model is in training mode
         model.train()
         
-        # Log model info
+        # Log model info and setup trainer
         model_info = model.get_model_summary()
         ic(f"Model info: {model_info}")
-        
-        # Setup trainer
-        trainer = self._setup_trainer(output_dir, resume_from, fast_dev_run)
-        assert isinstance(trainer.checkpoint_callback, ModelCheckpoint)
+        trainer, checkpoint_callback = self._setup_trainer(output_dir, resume_from)
         
         # Train model
         ic("Starting training...")
@@ -220,7 +178,7 @@ class DialogueTrainer:
                 self.wandb_manager.update_run_name_with_submission_score(rouge_f_score)
 
         # Get best model path
-        best_model_path = trainer.checkpoint_callback.best_model_path
+        best_model_path = checkpoint_callback.best_model_path
         ic(f"Training completed. Best model: {best_model_path}")
         
         # Log final results
@@ -342,13 +300,8 @@ class DialogueTrainer:
         ic(f"Output directories created: {output_dir}")
         return output_dir
     
-    def _setup_trainer(
-        self,
-        output_dir: Path,
-        resume_from: Optional[str] = None,
-        fast_dev_run: bool = False
-    ) -> pl.Trainer:
-        """Setup PyTorch Lightning trainer."""
+    def _setup_trainer(self, output_dir: Path, resume_from: Optional[str] = None):
+        """Setup PyTorch Lightning trainer and return trainer and checkpoint callback."""
         assert self.cfg is not None, "Configuration must be loaded before setting up trainer"
         training_cfg = self.cfg.training
         
@@ -440,7 +393,7 @@ class DialogueTrainer:
             enable_progress_bar=True,
             
             # Debugging
-            fast_dev_run=fast_dev_run or training_cfg.fast_dev_run,
+            fast_dev_run=training_cfg.fast_dev_run,
             overfit_batches=training_cfg.overfit_batches,
             limit_train_batches=training_cfg.limit_train_batches,
             limit_val_batches=training_cfg.limit_val_batches,
@@ -454,7 +407,7 @@ class DialogueTrainer:
         )
         
         ic("Trainer setup complete")
-        return trainer
+        return trainer, checkpoint_callback
 
 
 @click.group()
@@ -462,32 +415,61 @@ def cli():
     """Dialogue Summarization Training CLI."""
     pass
 
-
 @cli.command()
-@click.option('--config-name', default='config', help='Configuration name')
-@click.option('--config-path', type=click.Path(), help='Custom config directory')
-@click.option('--resume-from', type=click.Path(), help='Checkpoint to resume from')
-@click.option('--fast-dev-run', is_flag=True, help='Run one batch for debugging')
-@click.option('--max-epochs', type=int, help='Override max epochs')
-@click.option('--batch-size', type=int, help='Override batch size')
-@click.option('--learning-rate', type=float, help='Override learning rate')
-@click.option('--override', 'overrides', multiple=True, help='Config overrides (key=value)')
-def train(config_name, config_path, resume_from, fast_dev_run, max_epochs, batch_size, learning_rate, overrides):
-    """Train dialogue summarization model."""
+@click.option(
+    '--experiment', 
+    default=None, 
+    help='Name of an experiment to run (uses the centralized config).'
+)
+@click.option(
+    '--config-name', 
+    default=None, 
+    help='Name of a specific config file to use for backward compatibility.'
+)
+@click.option(
+    '--resume-from', 
+    type=click.Path(exists=True), 
+    help='Checkpoint to resume from'
+)
+@click.option(
+    '--override', 
+    'overrides', 
+    multiple=True, 
+    help='Custom Hydra overrides (e.g., "training.max_epochs=5")'
+)
+def train(experiment, config_name, resume_from, overrides):
+    """
+    Train the model using either a specific experiment or a legacy config file.
+    """
     trainer = DialogueTrainer()
+    final_overrides = list(overrides)
     
+    # Logic to handle both new and legacy workflows
+    if experiment:
+        # 1. New, preferred workflow: Use an experiment.
+        config_to_load = 'config-baseline-centralized'
+        final_overrides.append(f"experiment={experiment}")
+        if config_name:
+            ic(f"Warning: --config-name '{config_name}' is ignored when --experiment is used.")
+    
+    elif config_name:
+        # 2. Legacy workflow: Use a specific config file.
+        config_to_load = config_name
+    
+    else:
+        # 3. Default behavior: Run the baseline experiment.
+        config_to_load = 'config-baseline-centralized'
+        final_overrides.append("experiment=baseline")
+        ic("No config or experiment specified. Defaulting to the 'baseline' experiment.")
+
     best_model_path = trainer.train(
-        config_name=config_name,
-        config_path=config_path,
-        overrides=list(overrides),
+        config_name=config_to_load,
+        overrides=final_overrides,
         resume_from=resume_from,
-        fast_dev_run=fast_dev_run,
-        max_epochs=max_epochs,
-        batch_size=batch_size,
-        learning_rate=learning_rate
     )
     
-    click.echo(f"Training complete. Best model: {best_model_path}")
+    click.echo(f"\nTraining complete. Best model saved to: {best_model_path}")
+    
 
 
 @cli.command()

@@ -3,7 +3,7 @@
 
 # The model path should be a trained checkpoint, but this is a fallback.
 checkpoint_path: null
-model_name_or_path: "gogamza/kobart-base-v2"
+model_name_or_path: "digit82/kobart-summarization"
 
 # Batch processing
 batch_size: 32
@@ -14,7 +14,7 @@ pin_memory: true
 generation:
   # Length control
   max_length: 80
-  min_length: 15  # Prevents generating tiny, useless summaries
+  min_length: 40  # Prevents generating tiny, useless summaries
 
   # Beam search
   num_beams: 4

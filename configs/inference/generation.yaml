@@ -57,8 +57,8 @@ output:
   save_generation_config: true
   
   # File formats
-  prediction_file: "predictions.csv"
-  submission_file: "submission.csv"
+  prediction_file: "predictions_inf.csv"
+  submission_file: "submission_inf.csv"
   
   # Include metadata
   include_scores: false

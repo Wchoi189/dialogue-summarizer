@@ -1,0 +1,29 @@
+# =============================================================================
+# configs/experiment/production.yaml
+# =============================================================================
+# @package _global_
+# Production experiment with optimal settings
+# Overrides for the 'production' experiment
+
+dataset:
+  batch_size: 32
+  eval_batch_size: 64
+  num_workers: 16
+
+training:
+  max_epochs: 15
+  optimizer:
+    lr: 3e-6
+  early_stopping:
+    patience: 4
+    min_delta: 0.005
+
+generation:
+  max_length: 50
+  num_beams: 5
+  repetition_penalty: 1.2
+  length_penalty: 0.7
+
+wandb:
+  tags: ["production", "final", "optimized"]
+  notes: "Production settings for final model"

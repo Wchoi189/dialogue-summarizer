@@ -79,7 +79,7 @@ class DialogueDataset(Dataset):
         dialogue = str(row[self.input_col])
 
         # ✅ CORRECT: This finds "#Person1#" and replaces it with "화자1"
-        dialogue = dialogue.replace("#Person1#", "화자1").replace("#Person2#", "화자2").replace("#Person3#", "화자3")
+        # dialogue = dialogue.replace("#Person1#", "화자1").replace("#Person2#", "화자2").replace("#Person3#", "화자3")
 
         
 
@@ -95,8 +95,6 @@ class DialogueDataset(Dataset):
                 target_value = target_value.iloc[0]
             if not pd.isna(target_value):
                 summary = str(target_value)
-            if summary is not None:
-                summary = summary.replace("#Person1#", "화자1").replace("#Person2#", "화자2").replace("#Person3#", "화자3")
         # Preprocess and tokenize
         inputs = self.preprocessor.prepare_inputs(
             dialogue=dialogue,

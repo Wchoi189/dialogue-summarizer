@@ -1,0 +1,19 @@
+# =============================================================================
+# configs/experiment/baseline.yaml
+# =============================================================================
+# @package _global_
+# Baseline experiment configuration - ONLY overrides needed
+
+# Override only what's different from main config
+training:
+  max_epochs: 8
+  optimizer:
+    lr: 5e-6
+
+generation:
+  max_length: 60
+  repetition_penalty: 1.3
+
+wandb:
+  tags: ["baseline", "kobart", "conservative"]
+  notes: "Baseline experiment with conservative settings"

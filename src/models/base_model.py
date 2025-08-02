@@ -17,7 +17,7 @@ from omegaconf import DictConfig
 from pytorch_lightning.loggers import WandbLogger
 from torch.optim import AdamW
 from transformers import get_cosine_schedule_with_warmup
-
+from utils.config_utils import ConfigManager
 from evaluation.metrics import RougeCalculator
 
 logger = logging.getLogger(__name__)
@@ -29,39 +29,27 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
     def __init__(self, cfg: DictConfig):
         """Initialize base model."""
         super().__init__()
+        
+        # 1. Store Configs & Hyperparameters
         self.cfg = cfg
         self.model_cfg = cfg.model
         self.training_cfg = cfg.training
-
-        # Config manager for dynamic config loading
-        from utils.config_utils import ConfigManager
-        self.config_manager = ConfigManager()
-
-        # Save hyperparameters
         self.save_hyperparameters(cfg)
-        
-        # Model and tokenizer (to be set by subclasses)
-        self.model: Optional[torch.nn.Module] = None
-        self.tokenizer = None
 
-        # Initialize model and tokenizer if subclass implements setup methods
-        if hasattr(self, "_setup_model"):
-            self._setup_model()
-        if hasattr(self, "_setup_tokenizer"):
-            self._setup_tokenizer()
-        
-        # Metrics storage
+        # 2. Initialize State Variables & Helpers
         self.training_metrics = {}
         self.validation_metrics = {}
-        
-        # Store step outputs for epoch end processing
         self.validation_step_outputs = []
         self.test_step_outputs = []
-
-        # Generation config
-        self.generation_config = self._setup_generation_config()
+        self._logged_postprocessing_stages = set()
         self.rouge_calculator = RougeCalculator()
+        self.config_manager = ConfigManager()
         
+        # 3. Setup Core Components
+        self.model: Optional[torch.nn.Module] = None
+        self.tokenizer = None
+        self.generation_config = self._setup_generation_config()
+
         ic("BaseSummarizationModel initialized")
     
     def clear_gpu_memory(self) -> None:
@@ -132,13 +120,13 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         # ✅ DEBUG: Check current config
         korean_cfg = post_cfg.get("korean_specific", {})
         remove_markers = korean_cfg.get("remove_special_markers", True)
-        ic(f"Current remove_special_markers setting: {remove_markers}")
+        # ic(f"Current remove_special_markers setting: {remove_markers}")
         
         if not post_cfg:
             return text.strip()
         
         # ✅ DEBUG: Check input text
-        ic(f"Post-processing input: '{text[:100]}...'")
+        # ic(f"Post-processing input: '{text[:100]}...'")
         
         # 1. Remove unwanted tokens
         remove_tokens = post_cfg.get("remove_tokens", [])
@@ -293,8 +281,29 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         # Check if #Person# tokens are preserved
         person_in_target = "#Person" in target_texts[0]
         person_in_pred = "#Person" in pred_texts[0]
-        ic(f"✅ #Person# tokens preserved in targets" if person_in_target else "❌ #Person# tokens missing from targets")
-        ic(f"✅ #Person# tokens preserved in predictions" if person_in_pred else "❌ #Person# tokens missing from predictions")
+        # ic(f"✅ #Person# tokens preserved in targets" if person_in_target else "❌ #Person# tokens missing from targets")
+        # ic(f"✅ #Person# tokens preserved in predictions" if person_in_pred else "❌ #Person# tokens missing from predictions")
+
+    def on_validation_epoch_start(self):
+        """Called once at the beginning of the validation epoch."""
+        stage = "validation"
+        
+        # Use the flag to ensure this logs only on the very first validation epoch
+        if stage not in self._logged_postprocessing_stages:
+            try:
+                # Load the specific post-processing config for the validation stage
+                post_cfg_name = self.cfg.get("postprocessing", {}).get(stage, "default")
+                post_cfg = self.config_manager.load_postprocessing_config(post_cfg_name)
+                
+                korean_cfg = post_cfg.get("korean_specific", {})
+                remove_markers = korean_cfg.get("remove_special_markers", True)
+                
+                ic(f"Post-processing for '{stage}' stage | remove_special_markers: {remove_markers}")
+                
+                # Add the stage to the set so it doesn't log again
+                self._logged_postprocessing_stages.add(stage)
+            except Exception as e:
+                ic(f"Could not log post-processing settings for stage '{stage}': {e}")
 
     def on_validation_epoch_end(self) -> None:
         """Process validation epoch end and log metrics."""
@@ -348,10 +357,12 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         
         # Store metrics and cleanup
         self.validation_metrics = {"loss": avg_loss.item(), **rouge_scores}
-        ic(f"Validation metrics: {self.validation_metrics}")
-        self.validation_step_outputs.clear()
+        
+        ic("Validation metrics:")
+        ic(self.validation_metrics)
         self.clear_gpu_memory()
         self.log_gpu_memory("Validation epoch end")
+        self.validation_step_outputs.clear()
 
     def _log_wandb_validation_table(self, all_inputs, all_targets, all_predictions):
         """Log validation samples to WandB table."""
@@ -361,7 +372,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
                 
                 # Sample 5 predictions for the table
                 for i in range(min(len(all_predictions), 5)):
-                    input_text = all_inputs[i][:100] + "..." if len(all_inputs[i]) > 100 else all_inputs[i]
+                    input_text = all_inputs[i][:200] + "..." if len(all_inputs[i]) > 200 else all_inputs[i]
                     target_text = all_targets[i]
                     pred_text = all_predictions[i]
                     

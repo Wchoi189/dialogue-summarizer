@@ -1,0 +1,58 @@
+# =============================================================================
+# configs/experiment/debug.yaml
+# =============================================================================
+# @package _global_
+# Debug experiment with fast settings
+# Overrides for the 'debug' experiment
+
+dataset:
+  batch_size: 4
+  eval_batch_size: 4
+
+training:
+  max_epochs: 2
+  fast_dev_run: true
+  limit_train_batches: 0.1
+  limit_val_batches: 0.1
+  max_steps: -1
+  
+# training:
+#   # --- Copied from the base config ---
+#   accelerator: "auto"
+#   devices: 1
+#   precision: "16-mixed"
+#   accumulate_grad_batches: 2
+#   optimizer:
+#     name: "adamw"
+#     lr: 5e-6
+#     weight_decay: 0.01
+#     betas: [0.9, 0.999]
+#     eps: 1e-8
+#   lr_scheduler:
+#     name: "cosine"
+#     warmup_ratio: 0.1
+#   val_check_interval: 1.0
+#   check_val_every_n_epoch: 1
+#   monitor: "val/rouge_f"
+#   mode: "max"
+#   save_top_k: 2
+#   gradient_clip_val: 0.5
+#   gradient_clip_algorithm: "norm"
+
+#   # --- Values specifically overridden for the DEBUG experiment ---
+#   max_epochs: 2
+#   fast_dev_run: true
+#   limit_train_batches: 0.1
+#   limit_val_batches: 0.1
+#   early_stopping:
+#     enabled: false # Disable early stopping for quick debug runs
+
+generation:
+  num_beams: 2
+
+wandb:
+  offline: true
+  tags: ["debug", "fast"]
+
+logging:
+  level: "DEBUG"

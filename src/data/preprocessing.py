@@ -32,7 +32,7 @@ class DialoguePreprocessor:
         """
         self.dataset_cfg = dataset_cfg
         self.tokenizer = tokenizer
-        # ✅ CHANGE: Use dataset_cfg.preprocessing instead of cfg.preprocessing
+        
         self.preprocessing_cfg = dataset_cfg.preprocessing
         
         # Add special tokens to tokenizer
@@ -41,18 +41,30 @@ class DialoguePreprocessor:
         ic(f"DialoguePreprocessor initialized with {len(self.tokenizer)} tokens")
     
     def _setup_special_tokens(self) -> None:
-        """Setup special tokens in tokenizer."""
-        # special_tokens = self.preprocessing_cfg.special_tokens
-        
-        # if special_tokens:
-        #     # Ensure special tokens are strings and add them individually
-        #     special_tokens_list = [str(token) for token in special_tokens]
-        #     total_added = 0
-        #     for token in special_tokens_list:
-        #         num_added = self.tokenizer.add_tokens(token, special_tokens=True)
-        #         total_added += num_added
-        #     ic(f"Added {total_added} special tokens: {special_tokens_list}")
-        pass
+        """
+        Safely adds special tokens from the configuration to the tokenizer.
+        This method is backward-compatible and will not fail if the key is missing or empty.
+        """
+        # 1. Safely get the list of tokens, defaulting to an empty list if the key is missing.
+        special_tokens_list = self.preprocessing_cfg.get("special_tokens", [])
+
+        # 2. Guard clause: If there are no tokens to add, exit the method early.
+        if not special_tokens_list:
+            return
+
+        # 3. Ensure all provided tokens are strings before adding them.
+        special_tokens_list = [str(token) for token in special_tokens_list]
+
+        # 4. Add the tokens as "special tokens" to prevent the tokenizer from splitting them.
+        num_added = self.tokenizer.add_special_tokens(
+            {'additional_special_tokens': special_tokens_list}
+        ) # type: ignore
+
+        # 5. Log a helpful message only if new tokens were actually added to the vocabulary.
+        if num_added > 0:
+            ic(f"Added {num_added} new special tokens to the tokenizer: {special_tokens_list}")
+        else:
+            ic("Special tokens already exist in the tokenizer vocabulary.")
     
     def clean_text(self, text: str) -> str:
         """
@@ -95,8 +107,8 @@ class DialoguePreprocessor:
             if not dialogue:
                 return False
             
-            # ✅ FIX: Update the pattern to look for "화자" (speaker)
-            speaker_pattern = r'화자\d+'
+            # ✅ FIX: Update the pattern to look for "#Person#" (speaker)
+            speaker_pattern = r'#Person\d+#'
             speakers = re.findall(speaker_pattern, dialogue)
             
             if not speakers:
@@ -242,6 +254,7 @@ class DialoguePreprocessor:
         
         return text
     
+
     def batch_preprocess(
         self,
         dialogues: List[str],
@@ -253,26 +266,9 @@ class DialoguePreprocessor:
         """
         ic(f"Preprocessing batch of {len(dialogues)} samples")
 
-    def batch_preprocess(
-        self,
-        dialogues: List[str],
-        summaries: Optional[List[str]] = None,
-        is_inference: bool = False
-    ) -> Dict[str, Any]:
-        """
-        Preprocess a batch of dialogues and summaries using vectorization.
-        """
-        ic(f"Preprocessing batch of {len(dialogues)} samples")
-
-        # ✅ FIX: Add the replacement logic here for inference
-        processed_dialogues = [
-            d.replace("#Person1#", "화자1").replace("#Person2#", "화자2").replace("#Person3#", "화자3") 
-            for d in dialogues
-        ]
-        processed_dialogues = [self.preprocess_dialogue(d) for d in processed_dialogues]
         
         model_inputs = self.tokenizer(
-            processed_dialogues,
+            # processed_dialogues,
             max_length=self.preprocessing_cfg.max_input_length,
             truncation=True,
             padding=True, # Padding is handled by the tokenizer for the whole batch

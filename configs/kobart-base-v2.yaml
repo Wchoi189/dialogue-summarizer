@@ -12,7 +12,7 @@ defaults:
   - _self_
 
 # Experiment settings
-experiment_name: "dialogue-summarization-improvements"
+experiment_name: "dialogue-summarization-length-penalty"
 run_name: null  # Auto-generated if null
 seed: 42
 

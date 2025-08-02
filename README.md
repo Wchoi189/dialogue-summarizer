@@ -35,6 +35,7 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     **Debug training run**
     ```bash
     python scripts/train.py train --override training=baseline-debug
+    python scripts/train.py train --experiment debug --override training.fast_dev_run=true
     ```
 3.  **Custom Postprocesssing**
     ```bash

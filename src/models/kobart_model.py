@@ -35,24 +35,26 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         # Setup model
         self._setup_model()
 
-        # ✅ ACTION: Add this block to process the banned tokens list
+        # Setup generation configuration
         self.banned_token_ids = []
         if self.generation_config and "banned_tokens" in self.generation_config:
             banned_tokens = self.generation_config.pop("banned_tokens")
             self.banned_token_ids = self.tokenizer.convert_tokens_to_ids(banned_tokens)
-            
+
         # Add assertions to ensure components are initialized
         assert self.model is not None, "Model not initialized"
         assert self.tokenizer is not None, "Tokenizer not initialized"
         
-        # Resize token embeddings if special tokens were added
-        if hasattr(self.tokenizer, 'vocab_size'):
-            original_vocab_size = self.model.config.vocab_size
-            current_vocab_size = len(self.tokenizer)
+        # ✅ KEEP THIS BLOCK: It's the correct, robust way to resize.
+        original_vocab_size = self.model.config.vocab_size
+        current_vocab_size = len(self.tokenizer)
+        
+        if current_vocab_size > original_vocab_size:
+            ic(f"Resizing token embeddings: {original_vocab_size} -> {current_vocab_size}")
+            self.model.resize_token_embeddings(current_vocab_size)
             
-            if current_vocab_size > original_vocab_size:
-                ic(f"Resizing token embeddings: {original_vocab_size} -> {current_vocab_size}")
-                self.model.resize_token_embeddings(current_vocab_size)
+        # 🗑️ REMOVE THIS DUPLICATE LINE
+        # self.model.resize_token_embeddings(len(self.tokenizer))
         
         ic(f"KoBARTSummarizationModel initialized with {self.get_parameter_count()} parameters")
     
@@ -67,19 +69,12 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
             model_name,
             use_fast=tokenizer_cfg.get("use_fast", True)
         )
-        
-        # # ✅ CHANGE: Get special tokens from dataset config instead of model config
-        # dataset_cfg = self.cfg.dataset
-        # additional_tokens = dataset_cfg.preprocessing.get("special_tokens", [])
-        
-        # if additional_tokens:
-        #     # Ensure tokens are strings
-        #     additional_tokens = [str(token) for token in additional_tokens]
-            
-        #     # ✅ CRITICAL FIX: Add these as regular vocabulary tokens, not special tokens.
-        #     # This prevents `decode(skip_special_tokens=True)` from removing them.
-        #     num_added = self.tokenizer.add_tokens(additional_tokens)
-        #     # ic(f"Added {num_added} new tokens to vocabulary: {additional_tokens}")
+        #  Update the model's internal tokenizer as it was done in base_model.py
+        special_tokens_list = self.cfg.dataset.preprocessing.get("special_tokens", [])
+        if special_tokens_list:
+            self.tokenizer.add_special_tokens(
+                {'additional_special_tokens': [str(t) for t in special_tokens_list]}
+            ) # type: ignore       
 
         # Verify special tokens
         special_tokens = {
@@ -235,6 +230,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
             "pad_token_id": self.tokenizer.pad_token_id,
             "bos_token_id": self.tokenizer.bos_token_id,
             "eos_token_id": self.tokenizer.eos_token_id,
+            "bad_words_ids": [self.banned_token_ids] if self.banned_token_ids else None
         })
         
         assert self.model is not None, "Model not initialized"
