@@ -28,6 +28,7 @@ dataset:
 # Override generation settings
 generation:
   max_length: 50
+  min_length: 8
   num_beams: 5
   repetition_penalty: 1.5
   no_repeat_ngram_size: 3

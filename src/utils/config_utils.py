@@ -206,7 +206,7 @@ class ConfigManager:
         self, 
         base_cfg: DictConfig, 
         override_cfg: DictConfig
-    ) -> DictConfig:
+        ) -> DictConfig:
         """
         Merge two configurations with override taking precedence.
         
@@ -219,6 +219,8 @@ class ConfigManager:
         """
         merged = OmegaConf.merge(base_cfg, override_cfg)
         return DictConfig(merged)
+    
+    
     
     def get_config_summary(self, cfg: DictConfig) -> Dict[str, Any]:
         """

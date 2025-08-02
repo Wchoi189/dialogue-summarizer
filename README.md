@@ -30,12 +30,17 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     python scripts/train.py train --config-name config
     python scripts/train.py train --config-name kobart-base-v2
     python scripts/train.py train --config-name config
+
+    # Use minimal postprocessing for debugging
+    python scripts/train.py train --config-name config --override postprocessing=minimal
+
     ```
 
     **Debug training run**
     ```bash
-    python scripts/train.py train --override training=baseline-debug
-    python scripts/train.py train --experiment debug --override training.fast_dev_run=true
+    python scripts/train.py train --override training=production
+    python scripts/train.py train --override experiment=production
+    python scripts/train.py train --experiment production --override
     ```
 3.  **Custom Postprocesssing**
     ```bash

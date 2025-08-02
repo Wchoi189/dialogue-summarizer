@@ -118,7 +118,13 @@ class DialogueTrainer:
             config_name=config_name,
             overrides=overrides or []
         )
-
+        # 2. ✨ MERGE USING YOUR EXISTING METHOD ✨
+        if 'experiment' in self.cfg:
+            # Use the merge method from your ConfigManager instance
+            self.cfg = self.config_manager.merge_configs(self.cfg, self.cfg.experiment)
+            
+            # Clean up the now-redundant 'experiment' key
+            # del self.cfg['experiment']
         # CRITICAL: Setup PyTorch optimizations BEFORE any model/training code
         setup_pytorch_optimizations(self.cfg)    
 
