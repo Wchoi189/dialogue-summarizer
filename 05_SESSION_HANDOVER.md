@@ -1,186 +1,144 @@
-### OUTDATED DUE TO FREQUENT DEBUGING SESSIONS. NEED TO REASSESS PROGRESS AND PLAN###
-### AFTER DEBUG PROCEED WITH PHASE 2D-2E ###
-# Session Handover Summary - Phase 2D-2E Complete
+# Session Handover Summary - Korean Dialogue Summarization Project
 
-## **Project Status: Dialogue Summarization with PyTorch Lightning & Hydra**
+## 📊 **Current Status: Progress Made but Critical Issues Remain**
 
-### **Current Phase: 2D-2E Complete ✅**
-- **Timeline**: July 27 - August 6, 2025
-- **Current Baseline**: ROUGE-F1: 47.1244
-- **Session Focus**: Evaluation & Inference Pipeline Implementation
+### **Latest Performance Results**
+- **Previous Run**: ROUGE-F1: 0.1677 → **Current Run**: ROUGE-F1: 0.1606
+- **Issue**: Still extremely low performance (target: 47.1244 ROUGE-F1)
+- **New Problem**: **#Person# tokens missing from outputs** - critical for dialogue structure
 
----
+### **Key Findings from Recent Work**
 
-## **Completed in This Session (Phase 2D-2E)**
+#### ✅ **Data Understanding Complete (EDA Results)**
+- **Dataset**: 12,457 train, 499 dev, 499 test samples
+- **Dialogue Structure**: Mostly 2-speaker (12,335/12,457), avg 84 words → 16 words summary
+- **Compression Ratio**: 0.23 (summaries are ~23% of input length)
+- **Korean Patterns**: Clean data, proper Korean endings (다.), minimal preprocessing needed
 
-### **✅ Evaluation Pipeline**
-1. **`scripts/evaluate.py`** - Click CLI evaluation script
-   - Model evaluation on val/test splits
-   - Multi-model comparison
-   - Submission file validation
-   - Comprehensive ROUGE metrics
+#### ⚠️ **Critical Issues Identified**
+1. **Model generating continuations instead of summaries** (confirmed in validation samples)
+2. **#Person# tokens disappearing** from outputs (new issue you noticed)
+3. **Length control not working** - outputs still too long and unfocused
+4. **ROUGE scores remain extremely low** despite configuration fixes
 
-2. **`src/evaluation/metrics.py`** - ROUGE calculation engine
-   - Korean text support with preprocessing
-   - Multiple reference support
-   - Fallback custom ROUGE implementation
-   - Rouge-score package integration
+#### 📝 **Evidence from Latest Run (summarization_fix)**
+```
+Input: "#Person1# : 안녕하세요, 오늘 기분이 어떠세요? #Person2# : 요즘 숨쉬기가 힘들어요..."
+Ground Truth: "는 숨쉬기 어려워합니다. 의사는 에게 증상을 확인하고, 천식 검사를 위해 폐 전문의에게 가볼 것을 권합니다."
+Prediction: "은  에게 천식 검사를 위해 폐 전문의에게 가보라고 권장합니다. 천식은 주로 활동할 때 나타나는 알레르기가 아니며..."
+```
 
-3. **`src/evaluation/evaluator.py`** - Evaluation pipeline
-   - Detailed analysis with per-sample metrics
-   - Quality metrics (empty, short, repetitive predictions)
-   - Summary statistics and reporting
-   - Multi-reference evaluation support
+**Problems Observed:**
+- Missing #Person# tokens (showing as empty spaces)
+- Still generating continuations vs summaries
+- ROUGE-1: 0.0000 (complete mismatch)
 
-### **✅ Inference Pipeline**
-4. **`scripts/inference.py`** - Click CLI inference script
-   - Single file prediction
-   - Batch processing
-   - Competition submission creation
-   - Configurable generation parameters
+## 🔧 **Implemented Solutions This Session**
 
-5. **`src/inference/predictor.py`** - Prediction engine
-   - GPU/CPU inference support
-   - Batch prediction optimization
-   - Post-processing pipeline
-   - DataLoader integration
+### **Configuration Updates Created**
+1. **`configs/experiment/summarization_fix.yaml`** - Length control focus
+2. **Enhanced preprocessing logic** - Korean summarization prompts
+3. **Postprocessing improvements** - Summary validation
 
-6. **`scripts/create_submission.py`** - Submission file creator
-   - Exact format matching with sample_submission.csv
-   - Format validation and fixing
-   - Template-based formatting
-   - Error handling for malformed submissions
+### **Key Config Changes Applied**
+- `max_target_length: 80` (reduced from 120 based on EDA)
+- `generation.max_length: 80` (force shorter outputs)
+- `length_penalty: 2.0` (strong penalty for long outputs)
+- `lr: 1e-4` (increased learning rate)
 
-### **✅ Code Validation**
-7. **`scripts/validate_code.py`** - Testing framework
-   - Component import validation
-   - Configuration testing
-   - ROUGE metrics testing
-   - File utilities validation
-   - Data path verification
+## 🚨 **Critical Issues for Next Session**
 
----
+### **1. #Person# Token Issue (TOP PRIORITY)**
+- **Problem**: Reference summaries use `#Person1#` but predictions show empty spaces
+- **Likely Cause**: Tokenizer or postprocessing removing these tokens
+- **Impact**: Makes evaluation impossible (can't match ground truth format)
 
+### **2. Model Behavior Issue**
+- **Problem**: Still generating continuations despite length penalties
+- **Evidence**: Outputs read like dialogue continuations, not summaries
+- **Root Cause**: Model hasn't learned summarization task properly
 
----
+### **3. Baseline Gap Analysis Needed**
+- **Current**: 0.16 ROUGE-F1
+- **Target**: 47.12 ROUGE-F1 
+- **Gap**: 294x performance difference indicates fundamental issues
 
-## **Key Technical Decisions Made**
+## 🎯 **Immediate Actions for Next Session**
 
-### **CLI Framework Change**
-- **Switched from Fire to Click**: More structured CLI with better help/validation
-- **Reason**: Better user experience and more maintainable command structure
-
-### **Code Organization**
-- **File Size Limit**: Kept all modules under 300 lines for better context management
-- **Modular Design**: Separated concerns into focused components
-- **Error Handling**: Comprehensive try/catch with informative logging
-
-### **Korean Text Support**
-- **ROUGE Calculation**: Proper Korean text preprocessing
-- **Special Tokens**: Handler for `#Person1#`, `#Person2#`, etc.
-- **Encoding**: UTF-8 throughout with fallback to cp949
-
-### **Submission Format**
-- **Exact Matching**: Handles indexed CSV format precisely
-- **Validation**: Comprehensive format checking against template
-- **Error Recovery**: Automatic format fixing for common issues
-
----
-
-## **Validation Status**
-
-**All Components Tested ✅**
-- ✅ Imports: All modules load successfully
-- ✅ File Utils: I/O operations work correctly
-- ✅ ROUGE Metrics: Calculation engine functional
-- ✅ Data Paths: All required files found
-- ✅ Configuration: Hydra config loading works
-- ✅ Inference: Components properly structured
-
----
-
-## **Ready for Next Phase**
-
-### **Phase 2E: Final Integration & Testing**
-1. **End-to-End Testing**: Run full training → evaluation → submission pipeline
-2. **Performance Optimization**: Batch size tuning, memory optimization
-3. **Solar API Integration**: Implement alternative model approach
-4. **Baseline Improvement**: Experiment with hyperparameters
-
-### **Immediate Next Steps**
-1. **Test Training Pipeline**: Run a quick training to generate checkpoint
-2. **Test Evaluation**: Evaluate checkpoint on dev set
-3. **Test Inference**: Generate submission file from checkpoint
-4. **Validate Submission**: Ensure exact format matching
-
----
-
-## **Usage Examples**
-
-### **Training**
+### **Priority 1: Fix #Person# Token Handling**
 ```bash
-python scripts/train.py --config-name config --max-epochs 1 --fast-dev-run
+# Debug tokenizer behavior
+python -c "
+from transformers import AutoTokenizer
+tokenizer = AutoTokenizer.from_pretrained('digit82/kobart-summarization')
+print('Person1 tokens:', tokenizer.tokenize('#Person1#'))
+print('Person2 tokens:', tokenizer.tokenize('#Person2#'))
+"
+
+# Check if postprocessing is removing them
+python scripts/inference.py predict [checkpoint] --override postprocessing.korean_specific.remove_special_markers=false
 ```
 
-### **Evaluation**
+### **Priority 2: Baseline Model Analysis**
 ```bash
-python scripts/evaluate.py evaluate /path/to/checkpoint.ckpt --split val
+# Test baseline model directly on your data
+python model_diagnostic.py  # (script created this session)
+
+# Compare with original KoBART performance
+python -c "
+from transformers import AutoTokenizer, BartForConditionalGeneration
+model = BartForConditionalGeneration.from_pretrained('digit82/kobart-summarization')
+# Test on sample dialogues
+"
 ```
 
-### **Inference**
-```bash
-python scripts/inference.py submission /path/to/checkpoint.ckpt --output-file submission.csv
-```
+### **Priority 3: Training Strategy Revision**
+- Investigate why model isn't learning summarization task
+- Consider different base model (gogamza/kobart-base-v2)
+- Implement stronger prompt engineering during training
 
-### **Validation**
-```bash
-python scripts/validate_code.py run-all
-```
+## 📁 **Files Created/Modified This Session**
+
+### **New Files**
+1. `korean_dialogue_eda.py` - Comprehensive data analysis (completed)
+2. `model_diagnostic.py` - Model performance testing
+3. `configs/experiment/quick_fix.yaml` - Initial config fix
+4. `configs/experiment/summarization_fix.yaml` - Length-focused config
+5. `eda_analysis_report.json` - Complete data analysis results
+
+### **Key Insights from EDA**
+- **Data is clean and well-structured**
+- **Korean patterns are consistent**
+- **Compression ratio is very aggressive (0.23)**
+- **Most dialogues are 2-speaker conversations**
+
+## 🔄 **Next Session Continuation Strategy**
+
+### **Phase 1: Debug #Person# Tokens (1 hour)**
+1. Investigate tokenizer handling of special tokens
+2. Check postprocessing configuration
+3. Verify ground truth format expectations
+
+### **Phase 2: Model Behavior Analysis (2 hours)**
+1. Test baseline KoBART directly on your data
+2. Compare with your fine-tuned model outputs
+3. Identify why summarization isn't being learned
+
+### **Phase 3: Alternative Approaches (if needed)**
+1. Different base model (gogamza/kobart-base-v2)
+2. Stronger training signals (label smoothing, different loss)
+3. Prompt-based training approach
+
+## 💡 **Key Research Direction**
+
+The fundamental issue appears to be that the model is treating this as a **text completion task** rather than a **summarization task**. The next session should focus on:
+
+1. **Fixing token handling** to match evaluation format
+2. **Understanding why summarization behavior isn't emerging**
+3. **Potentially switching to a different training approach**
+
+The EDA shows your data is good quality, so the issue is in model training/configuration, not data preparation.
 
 ---
 
-## **Next Session Continuation Prompt**
-
-```
-Continue the dialogue summarization project implementation. Phase 2D-2E (Evaluation & Inference) is complete with Click CLI interfaces, ROUGE metrics, and submission file creation.
-
-Current status:
-- All components validated and working
-- 7 new files created: evaluation, inference, and validation scripts
-- File size maintained under 300 lines each
-- Korean text support throughout
-- Exact submission format matching
-
-Next phase: End-to-end testing and integration
-1. Test full training pipeline with small epoch count
-2. Generate checkpoint and run evaluation
-3. Create submission file and validate format
-4. Performance optimization and Solar API integration
-
-Project structure and all completed files are in context. Continue with end-to-end testing.
-```
-
----
-
-## **File Manifest**
-
-### **New Files Created This Session**
-1. `scripts/evaluate.py` (295 lines) - Evaluation CLI
-2. `src/evaluation/metrics.py` (272 lines) - ROUGE calculation
-3. `src/evaluation/evaluator.py` (284 lines) - Evaluation pipeline
-4. `scripts/inference.py` (287 lines) - Inference CLI
-5. `src/inference/predictor.py` (299 lines) - Prediction engine
-6. `scripts/create_submission.py` (265 lines) - Submission creator
-7. `scripts/validate_code.py` (243 lines) - Code validation
-
-**Total New Code**: ~1,945 lines across 7 files
-**Average File Size**: 278 lines (under 300 limit)
-
-### **Dependencies Required**
-All dependencies already in `environment.yml`:
-- Click for CLI interfaces
-- rouge-score for metrics (with fallback)
-- PyTorch Lightning for training/inference
-- Transformers for model handling
-- icecream for debugging
-- Rich for logging
+**Continue with**: Investigation of #Person# token handling and model behavior analysis. The data analysis is complete and shows clean, well-structured Korean dialogue data suitable for summarization.

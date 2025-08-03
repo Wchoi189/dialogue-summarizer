@@ -12,7 +12,7 @@ from icecream import ic
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-
+from postprocessing.postprocessing import apply_post_processing
 from data.dataset import InferenceDataset, create_collate_fn
 from data.preprocessing import create_preprocessor
 from models.base_model import BaseSummarizationModel
@@ -40,7 +40,7 @@ class DialoguePredictor:
         """
         self.model = model
         self.cfg = cfg
-        self.inference_cfg = cfg.inference
+       
         
         # Setup device
         if device is None:
@@ -63,6 +63,13 @@ class DialoguePredictor:
         
         ic(f"DialoguePredictor initialized on {self.device}")
     
+    def _post_process_output(self, text: str) -> str:
+        """Post-process generated text using the centralized cleaner."""
+        post_cfg = self.cfg.get("postprocessing", {})
+        
+        # ✅ Call the single, centralized function
+        return apply_post_processing(text, post_cfg)
+
     def _setup_generation_config(self) -> Dict[str, Any]:
         """Setup generation configuration from inference config."""
         
@@ -206,10 +213,9 @@ class DialoguePredictor:
         #     padding_value=0
         # ).to(self.device)
 
-        # AFTER (✅ Use the tensors from the preprocessor directly)
-        input_ids = torch.tensor(batch_inputs["input_ids"]).to(self.device)
-        attention_mask = torch.tensor(batch_inputs["attention_mask"]).to(self.device)
-             
+        # Use torch.as_tensor() to make the type clear to the linter
+        input_ids = torch.as_tensor(batch_inputs["input_ids"]).to(self.device)
+        attention_mask = torch.as_tensor(batch_inputs["attention_mask"]).to(self.device)
         # Generate
         with torch.no_grad():
             outputs = self.model.model.generate(
@@ -299,30 +305,6 @@ class DialoguePredictor:
         ic(f"Saved predictions to {output_file}")
     
   
-        if text_cleaning.get("normalize_whitespace", True):
-            import re
-            text = re.sub(r'\s+', ' ', text)
-        
-        if text_cleaning.get("remove_empty_lines", True):
-            lines = [line.strip() for line in text.split('\n') if line.strip()]
-            text = ' '.join(lines)
-        
-        # 3. Korean-specific cleaning
-        korean_cfg = post_cfg.get("korean_specific", {})
-        
-        if korean_cfg.get("remove_special_markers", True):
-            import re
-            text = re.sub(r'#\w+#', '', text)
-            text = ' '.join(text.split())
-        
-        # 4. Advanced cleaning
-        advanced_cfg = post_cfg.get("advanced", {})
-        min_length = advanced_cfg.get("min_length", 5)
-        
-        if len(text.strip()) < min_length:
-            return "요약을 생성할 수 없습니다."  # Korean fallback message
-        
-        return text.strip()
     
     def create_dataloader(self, df: pd.DataFrame) -> DataLoader:
         """
@@ -435,11 +417,10 @@ def create_predictor(
     from models.kobart_model import KoBARTSummarizationModel
     
     # Load model from checkpoint
+    # (Let PyTorch Lightning handle the config loading):
     model = KoBARTSummarizationModel.load_from_checkpoint(
-        model_path,
-        cfg=cfg
+    model_path
     )
-    
     # Create predictor
     predictor = DialoguePredictor(model, cfg, device)
     

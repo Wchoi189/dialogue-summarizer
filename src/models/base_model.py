@@ -14,7 +14,7 @@ from icecream import ic
 from omegaconf import DictConfig
 from torch.optim import AdamW
 from transformers import get_cosine_schedule_with_warmup
-
+from postprocessing.postprocessing import apply_post_processing
 from utils.config_utils import ConfigManager
 from evaluation.metrics import RougeCalculator
 
@@ -199,27 +199,6 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         outputs.clear()
         self.clear_gpu_memory()
 
-    # def _log_wandb_validation_table(self, inputs: List[str], targets: List[str], predictions: List[str]):
-    #     """Logs a sample of predictions, targets, and metrics to a wandb.Table."""
-    #     try:
-    #         if isinstance(self.logger, WandbLogger) and self.logger.experiment:
-    #             table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1", "ROUGE-2", "ROUGE-L"])
-                
-    #             for i in range(min(len(predictions), 5)):
-    #                 sample_rouge = self.rouge_calculator.calculate_rouge([predictions[i]], [targets[i]])
-    #                 table.add_data(
-    #                     self.current_epoch,
-    #                     inputs[i],
-    #                     targets[i],
-    #                     predictions[i],
-    #                     f"{sample_rouge.get('rouge1_f', 0.0):.4f}",
-    #                     f"{sample_rouge.get('rouge2_f', 0.0):.4f}",
-    #                     f"{sample_rouge.get('rougeL_f', 0.0):.4f}"
-    #                 )
-                
-    #             self.logger.experiment.log({"validation_samples": table})
-    #     except Exception as e:
-    #         ic(f"WandB table logging failed (this is OK): {e}")
 
     def _log_wandb_validation_table(self, inputs: List[str], targets: List[str], predictions: List[str]):
         """Logs a sample of predictions and metrics to a wandb.Table."""
@@ -268,7 +247,13 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
             "early_stopping": gen_cfg.get("early_stopping", True)
         }
     
-  
+    def _apply_post_processing(self, text: str, stage: str) -> str:
+        """Applies all post-processing steps from the config."""
+        post_cfg = self.cfg.get("postprocessing", {})
+        
+        # ✅ Call the single, centralized function
+        return apply_post_processing(text, post_cfg)
+      
     def clear_gpu_memory(self):
         """Clears GPU cache."""
         if torch.cuda.is_available():
