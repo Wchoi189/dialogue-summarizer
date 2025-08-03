@@ -1,15 +1,15 @@
 # @package _global_
 # Main configuration file for dialogue summarization
 
-defaults:
-  - model: kobart
-  - dataset: dialogue_data
-  - training: baseline
-  - inference: generation
-  - preprocessing: standard
-  - postprocessing: default
-  - pytorch: default
-  - _self_
+# defaults:
+#   - model: kobart
+#   - dataset: dialogue_data
+#   - training: baseline
+#   - inference: generation
+#   - preprocessing: standard
+#   - postprocessing: default
+#   - pytorch: default
+#   - _self_
 
 # Experiment settings
 experiment_name: "dialogue-summarization"
@@ -34,7 +34,7 @@ wandb:
   entity: "boot_camp_13_2nd_group_2nd"  # Set your wandb entity
   username: "wchoi189@gmail.com"
   name: null  # Let the WandBManager generate the name automatically
-  tags: ["baseline", "kobart"]
+  tags: ["baseline", "kobart","config.yaml"]
   notes: "Dialogue summarization with KoBART"
   offline: false
   log_model: false

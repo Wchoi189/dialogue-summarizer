@@ -1,0 +1,11 @@
+preprocessing:
+  token_swapping:
+    enable: true
+    token_map:
+      "#Person1#": "화자1"
+      "#Person2#": "화자2"
+      "#Person3#": "화자3"
+      "#Person4#": "화자4"
+      "#Person5#": "화자5"
+      "#Person6#": "화자6"
+      "#Person7#": "화자7"

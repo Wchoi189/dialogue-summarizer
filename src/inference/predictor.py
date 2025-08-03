@@ -224,7 +224,7 @@ class DialoguePredictor:
                 **self.generation_config
             )
         # Get the setting from the config, defaulting to False for safety
-        skip_tokens = self.cfg.postprocessing.get("skip_special_tokens", False)
+        skip_tokens = self.cfg.postprocessing.get("skip_special_tokens", True)
 
         # Decode outputs
         summaries = []
@@ -363,7 +363,7 @@ class DialoguePredictor:
         all_sample_ids = []
         
         # Get the setting from the config, defaulting to False for safety
-        skip_tokens = self.cfg.postprocessing.get("skip_special_tokens", False)
+        skip_tokens = self.cfg.postprocessing.get("skip_special_tokens", True)
         with torch.no_grad():
             for batch in tqdm(dataloader, desc="Inference"):
                 # Move batch to device

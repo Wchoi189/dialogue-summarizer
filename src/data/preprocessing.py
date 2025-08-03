@@ -18,24 +18,33 @@ logger = logging.getLogger(__name__)
 
 
 class DialoguePreprocessor:
-    """Enhanced preprocessor for Korean dialogue data."""
-    
     def __init__(self, preprocessing_cfg: DictConfig, tokenizer: PreTrainedTokenizerFast):
-        """Initializes the preprocessor with configuration and a tokenizer."""
         self.cfg = preprocessing_cfg
         self.tokenizer = tokenizer
+        self.token_swap_cfg = self.cfg.get("token_swapping", {"enable": False})
         
+        # This will now conditionally add tokens
         self._setup_special_tokens()
         
         ic(f"DialoguePreprocessor initialized with {len(self.tokenizer)} tokens")
+
     
     def _setup_special_tokens(self) -> None:
-        """Adds special tokens from the config to the tokenizer's vocabulary."""
-        additional_tokens = self.cfg.get("special_tokens", [])
-        if additional_tokens:
-            num_added = self.tokenizer.add_tokens([str(t) for t in additional_tokens])
-            if num_added > 0:
-                ic(f"Added {num_added} new tokens to the tokenizer vocabulary.")
+        """Adds special tokens only if token swapping is disabled."""
+        # ✅ If we are swapping tokens for names, we don't need to add them to the vocab
+        if not self.token_swap_cfg.get("enable"):
+            additional_tokens = self.cfg.get("special_tokens", [])
+            if additional_tokens:
+                self.tokenizer.add_tokens([str(t) for t in additional_tokens])
+
+    def _swap_special_tokens(self, text: str) -> str:
+        """Replaces #Person# tokens with mapped names from the config."""
+        if self.token_swap_cfg.get("enable"):
+            token_map = self.token_swap_cfg.get("token_map", {})
+            for original, replacement in token_map.items():
+                text = text.replace(original, replacement)
+        return text
+    
 
     def _clean_text(self, text: str) -> str:
         """Performs basic cleaning of raw text strings."""
@@ -46,13 +55,17 @@ class DialoguePreprocessor:
         if self.cfg.get("normalize_whitespace", True):
             text = re.sub(r'\s+', ' ', text)
         return text.strip()
-
+    
     def preprocess_dialogue(self, dialogue: str) -> str:
         """Cleans and prepares a single dialogue string."""
+        # ✅ Add the swap step
+        dialogue = self._swap_special_tokens(dialogue)
         return self._clean_text(dialogue)
 
     def preprocess_summary(self, summary: str) -> str:
         """Cleans and prepares a single summary string."""
+        # ✅ Add the swap step
+        summary = self._swap_special_tokens(summary)
         return self._clean_text(summary)
 
     def prepare_inputs(

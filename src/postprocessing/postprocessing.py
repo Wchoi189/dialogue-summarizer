@@ -37,6 +37,17 @@ def _fix_incomplete_sentences(text: str) -> str:
     # If no punctuation exists at all, the text is a single fragment; return as is.
     return text
 
+def _swap_tokens_back(text: str, post_cfg: Dict) -> str:
+    """Replaces mapped names back to their original #Person# tokens."""
+    token_swap_cfg = post_cfg.get("token_swapping", {"enable": False})
+    if token_swap_cfg.get("enable"):
+        token_map = token_swap_cfg.get("token_map", {})
+        # Create a reverse mapping
+        reverse_map = {v: k for k, v in token_map.items()}
+        for replacement, original in reverse_map.items():
+            text = text.replace(replacement, original)
+    return text
+
 def apply_post_processing(text: str, post_cfg: Dict) -> str:
     """
     Applies a full pipeline of post-processing steps based on a configuration dictionary.
@@ -55,9 +66,13 @@ def apply_post_processing(text: str, post_cfg: Dict) -> str:
     
     # 3. Korean-specific cleaning
     korean_cfg = post_cfg.get("korean_specific", {})
-    if korean_cfg.get("remove_special_markers", False):
+    if korean_cfg.get("remove_special_markers", True):
         # This regex removes markers like #Address# but keeps #Person1#, #Person2#, etc.
-        text = re.sub(r'#(?!Person\d+#)\w+#', '', text)
+        # BEFORE:
+        # text = re.sub(r'#(?!Person\d+#)\w+#', '', text)
+
+        # AFTER (✅ Use this simpler regex to remove ALL #word# tokens):
+        text = re.sub(r'#\w+#', '', text)        
         text = ' '.join(text.split())
 
     # 4. Advanced cleaning using helper functions
@@ -67,9 +82,12 @@ def apply_post_processing(text: str, post_cfg: Dict) -> str:
     if advanced_cfg.get("fix_incomplete_sentences", True):
         text = _fix_incomplete_sentences(text)
 
+    # ✅ ADD THIS AS THE FINAL STEP BEFORE THE LENGTH CHECK
+    text = _swap_tokens_back(text, post_cfg)
+
     # 5. Final check for minimum length
-    min_length = advanced_cfg.get("min_length", 5)
+    min_length = post_cfg.get("advanced", {}).get("min_length", 5)
     if len(text.strip()) < min_length:
-        return "요약을 생성할 수 없습니다."  # Default message for summaries that are too short
+        return "요약을 생성할 수 없습니다."
         
     return text.strip()

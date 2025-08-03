@@ -25,6 +25,8 @@ from utils.config_utils import ConfigManager
 from utils.file_utils import FileManager, create_submission_file
 from utils.logging_utils import setup_logging
 
+# Centralized configuration file defined.
+CONFIG_FILE = "config-baseline-centralized"
 
 class InferenceRunner:
     """Main inference runner for dialogue summarization."""
@@ -40,7 +42,7 @@ class InferenceRunner:
         checkpoint_path: str,
         test_file: str,
         output_file: str,
-        config_name: str = "config",
+        config_name: str,
         config_path: Optional[str] = None,
         batch_size: Optional[int] = None,
         overrides: Optional[List[str]] = None
@@ -116,8 +118,8 @@ class InferenceRunner:
     def create_submission(
         self,
         checkpoint_path: str,
-        output_file: str = "submission.csv",
-        config_name: str = "config",
+        output_file: str,
+        config_name: str,
         config_path: Optional[str] = None,
         batch_size: Optional[int] = None
     ) -> str:
@@ -243,8 +245,7 @@ def cli():
 @click.argument('checkpoint_path', type=click.Path(exists=True))
 @click.argument('test_file', type=click.Path(exists=True))
 @click.argument('output_file', type=click.Path())
-# @click.option('--config-name', default='config', help='Configuration name') # Uncomment for phase specific config loading
-@click.option('--config-name', default='config-baseline-centralized', help='Configuration name')
+@click.option('--config-name', default=CONFIG_FILE, help='Configuration name')
 @click.option('--config-path', type=click.Path(), help='Custom config directory')
 @click.option('--batch-size', type=int, help='Override evaluation batch size')
 @click.option(
@@ -278,8 +279,8 @@ def predict(checkpoint_path, test_file, output_file, config_name, config_path, b
 
 @cli.command()
 @click.argument('checkpoint_path', type=click.Path(exists=True))
-@click.option('--output-file', default='submission.csv', help='Output submission file')
-@click.option('--config-name', default='config', help='Configuration name')
+@click.option('--output-file', default='submission_s.csv', help='Output submission file')
+@click.option('--config-name', default=CONFIG_FILE, help='Configuration name')
 @click.option('--config-path', type=click.Path(), help='Custom config directory')
 @click.option('--batch-size', type=int, help='Override batch size')
 def submission(checkpoint_path, output_file, config_name, config_path, batch_size):
@@ -302,7 +303,7 @@ def submission(checkpoint_path, output_file, config_name, config_path, batch_siz
 @click.argument('input_dir', type=click.Path(exists=True))
 @click.argument('output_dir', type=click.Path())
 @click.option('--pattern', default='*.csv', help='File pattern to match')
-@click.option('--config-name', default='config', help='Configuration name')
+@click.option('--config-name', default=CONFIG_FILE, help='Configuration name')
 def batch(checkpoint_path, input_dir, output_dir, pattern, config_name):
     """Run batch prediction on multiple files."""
     runner = InferenceRunner()

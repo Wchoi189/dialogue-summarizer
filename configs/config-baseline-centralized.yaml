@@ -5,7 +5,7 @@
 # If overrides are needed, define experiment in defaults below
 defaults:
   - _self_  # This config has highest priority
-  - experiment: baseline  # Load experiment-specific overrides
+  - experiment: baseswap_regular_names  # Load experiment-specific overrides
   
 
 # =============================================================================
@@ -140,7 +140,7 @@ postprocessing:
     remove_empty_lines: true
   
   korean_specific:
-    remove_special_markers: true  # use false to keep #Person# for structure
+    remove_special_markers: false  # use false to keep #Person# or #tokens# for structure
     normalize_punctuation: true
 # =============================================================================
 # TRAINING CONFIGURATION
