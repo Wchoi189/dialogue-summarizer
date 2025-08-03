@@ -1,7 +1,17 @@
 # FILE: configs/preprocessing/standard.yaml
 # @package _global_
 # Standard preprocessing configuration for dialogue summarization
-
 preprocessing:
   # Processing strategy name
   strategy: "std"
+  special_tokens:
+    # ✅ FIX: Add a new key for additional tokens to handle the #PersonN# tokens correctly.
+    # This will ensure they are treated as a single token during tokenization.
+    additional_special_tokens:
+      - "#Person1#"
+      - "#Person2#"
+      - "#Person3#"
+      - "#Person4#"
+      - "#Person5#"
+      - "#Person6#"
+      - "#Person7#"

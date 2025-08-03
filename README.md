@@ -35,8 +35,8 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     python scripts/train.py train --config-name config --override postprocessing=minimal
 
 
-    python scripts/train.py train --config-name config-baseline-centralized --override experiment swap_regular_names --max-epochs 1
-
+    python scripts/train.py train --config-name config-baseline-centralized --experiment swap_regular_names --max-epochs 1
+    python scripts/train.py train --config-name config-baseline-centralized --experiment swap_unbiased_speaker --max-epochs 5
 
     ```
 
@@ -67,9 +67,9 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     
     # For prediction
     python scripts/inference.py predict \
-    /home/wb2x/workspace/dialogue-summarizer/outputs/models/best-epoch=03-val_rouge_f=val/rouge_f=0.4896.ckpt \
-    data/dev.csv \
-    subission11.csv
+    /home/wb2x/workspace/dialogue-summarizer/outputs/models/best-epoch=01-val_rouge_f=val/rouge_f=0.5137.ckpt \
+    data/test.csv \
+    subission12w.csv
 
     # (DEPRECATED) For prediction (before using centralized config)
     python scripts/inference.py predict \

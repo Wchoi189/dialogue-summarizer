@@ -57,6 +57,30 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
 
         ic(f"KoBARTSummarizationModel initialized with {self.get_parameter_count()} parameters")
 
+    # def _setup_tokenizer(self) -> None:
+    #     """Initializes the tokenizer and adds special tokens from the config."""
+    #     tokenizer_cfg = self.model_cfg.tokenizer
+    #     self.tokenizer = AutoTokenizer.from_pretrained(
+    #         tokenizer_cfg.name_or_path,
+    #         use_fast=tokenizer_cfg.get("use_fast", True)
+    #     )
+    #     # This assertion informs Pylance that the tokenizer is now valid
+    #     assert self.tokenizer is not None, "Tokenizer failed to load from pretrained."
+        
+    #     # BEFORE:
+    #     # special_tokens_list = self.cfg.preprocessing.get("special_tokens", [])
+
+    #     # AFTER (✅ Add this logic to handle old and new checkpoints)
+    #     if hasattr(self.cfg, "preprocessing"):
+    #         # For new checkpoints with the centralized structure
+    #         special_tokens_list = self.cfg.preprocessing.get("special_tokens", [])
+    #     else:
+    #         # Fallback for old checkpoints with the nested structure
+    #         # special_tokens_list = self.cfg.dataset.preprocessing.get("special_tokens", [])
+    #         special_tokens_list = self.cfg.dataset.preprocessing.get("special_tokens", [])
+
+    #     if special_tokens_list:
+    #         self.tokenizer.add_tokens([str(t) for t in special_tokens_list])
     def _setup_tokenizer(self) -> None:
         """Initializes the tokenizer and adds special tokens from the config."""
         tokenizer_cfg = self.model_cfg.tokenizer
@@ -64,24 +88,25 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
             tokenizer_cfg.name_or_path,
             use_fast=tokenizer_cfg.get("use_fast", True)
         )
-        # This assertion informs Pylance that the tokenizer is now valid
         assert self.tokenizer is not None, "Tokenizer failed to load from pretrained."
         
-        # BEFORE:
-        # special_tokens_list = self.cfg.preprocessing.get("special_tokens", [])
-
-        # AFTER (✅ Add this logic to handle old and new checkpoints)
-        if hasattr(self.cfg, "preprocessing"):
-            # For new checkpoints with the centralized structure
-            special_tokens_list = self.cfg.preprocessing.get("special_tokens", [])
-        else:
-            # Fallback for old checkpoints with the nested structure
-            # special_tokens_list = self.cfg.dataset.preprocessing.get("special_tokens", [])
-            special_tokens_list = self.cfg.dataset.preprocessing.get("special_tokens", [])
-
+        # ✅ NEW: Log the tokenizer's initial vocabulary size
+        ic(f"Initial tokenizer vocabulary size: {len(self.tokenizer)}")
+        
+        # This is where your special tokens are added
+        special_tokens_list = self.cfg.preprocessing.get("special_tokens", [])
+        
         if special_tokens_list:
+            # ✅ NEW: Check if any of the special tokens are already in the vocabulary
+            pre_existing_tokens = [token for token in special_tokens_list if token in self.tokenizer.get_vocab()]
+            if pre_existing_tokens:
+                ic(f"Warning: The following special tokens already exist in the tokenizer's vocabulary: {pre_existing_tokens}")
+            
             self.tokenizer.add_tokens([str(t) for t in special_tokens_list])
-
+            
+            # ✅ NEW: Log the final vocabulary size
+            ic(f"Final tokenizer vocabulary size: {len(self.tokenizer)}")
+            ic(f"Added special tokens: {special_tokens_list}")
 
     def _setup_model(self) -> None:
         """Initializes the BART model."""

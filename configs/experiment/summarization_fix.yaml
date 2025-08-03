@@ -1,67 +1,37 @@
 # configs/experiment/summarization_fix.yaml
 # @package _global_
 # Fix model to generate summaries instead of continuations
-
-# CRITICAL: Force summarization behavior
 training:
   max_epochs: 8
   optimizer:
     lr: 1e-4  # 🔥 Higher learning rate for faster convergence
     weight_decay: 0.01
-  
   early_stopping:
     patience: 3
     min_delta: 0.05  # Require substantial ROUGE improvement
 
-# Force proper input/output lengths based on EDA
 dataset:
   preprocessing:
-    max_input_length: 512
-    max_target_length: 80   # 🔥 REDUCED: Based on EDA (16 words ≈ 80 tokens)
-  
+    max_target_length: 80 # 🔥 REDUCED: Based on EDA (16 words ≈ 80 tokens)
   batch_size: 16
   eval_batch_size: 32
 
-# Force summarization with strict length control
 generation:
-  max_length: 80    # 🔥 CRITICAL: Match target length (16 words ≈ 80 tokens)
-  min_length: 10    # 🔥 Force minimum summarization 
-  num_beams: 5
-  
-  # CRITICAL: Aggressive summarization forcing
-  length_penalty: 2.0       # 🔥 STRONG penalty for long outputs
-  repetition_penalty: 1.8   # 🔥 Prevent repetitive generation
+  max_length: 80 # 🔥 CRITICAL: Match target length (16 words ≈ 80 tokens)
+  min_length: 10
+  length_penalty: 2.0 # 🔥 STRONG penalty for long outputs
+  repetition_penalty: 1.8 # 🔥 Prevent repetitive generation
   no_repeat_ngram_size: 3
   early_stopping: true
-  
-  # Force completion
   do_sample: false
-  temperature: 1.0
 
 # Enhanced postprocessing for summarization
 postprocessing:
-  remove_tokens:
-    - "<usr>"
-    - "<s>"
-    - "</s>"
-    - "<pad>"
-    - "<unk>"
-  
-  text_cleaning:
-    strip_whitespace: true
-    normalize_whitespace: true
-    remove_empty_lines: true
-    remove_repetitive_phrases: true  # 🔥 Key for summarization
-  
-  korean_specific:
-    remove_special_markers: false  # Keep #Person# for context
-    normalize_punctuation: true
-  
   advanced:
-    min_length: 8                    # 🔥 Based on EDA minimum
-    max_length: 100                  # 🔥 Hard cutoff
+    min_length: 8
+    max_length: 100
     fix_incomplete_sentences: true
-    force_korean_endings: true       # 🔥 Ensure proper Korean endings
+    force_korean_endings: true
 
 # WandB tracking
 wandb:

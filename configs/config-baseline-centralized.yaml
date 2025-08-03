@@ -11,7 +11,7 @@ defaults:
   - postprocessing: default
   - pytorch: default
   - inference: generation
-  
+  - experiment: null # ✅ FIX: Add a placeholder entry for the experiment
   # - model: kobart
   # - pytorch: default
   # - inference: generation
@@ -54,15 +54,19 @@ dataset:
     input: "dialogue"
     target: "summary"
     topic: "topic"
-  
   # Batch settings
-  batch_size: 16
+  batch_size: 16 # ⚠️ FIX: Update to recommended batch size
   eval_batch_size: 32
   num_workers: 8
   pin_memory: true
   shuffle_train: true
   shuffle_val: false
   drop_last: false
+
+  # preprocessing:
+  #   max_input_length: 512
+  #   max_target_length: 120
+  
 
 # =============================================================================
 # MODEL CONFIGURATION  
@@ -168,7 +172,7 @@ training:
   # Optimizer
   optimizer:
     name: "adamw"
-    lr: 3e-6  # Conservative for pretrained model
+    lr: 5e-5
     weight_decay: 0.05
     betas: [0.9, 0.999]
     eps: 1e-8
@@ -216,19 +220,13 @@ inference:
 # GENERATION CONFIGURATION (NOW TOP-LEVEL)
 # =============================================================================
 generation:
-  # ✅ ADD THIS ENTIRE BLOCK at the top level of your config file
-  # Length control
-  max_length: 60
-  min_length: 10
-
-  # Beam search settings
+  # Base generation settings here
+  max_length: 40
+  min_length: 5
   num_beams: 5
-  early_stopping: true
-
-  # Quality control
-  no_repeat_ngram_size: 3
-  repetition_penalty: 1.5
+  repetition_penalty: 1.6
   length_penalty: 0.6
+  early_stopping: true
 
   # Sampling (disabled)
   do_sample: false
