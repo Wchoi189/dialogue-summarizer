@@ -1,3 +1,17 @@
+# FILE: configs/experiment/swap_unbiased_speaker.yaml
+# @package _global_
+# Override the preprocessing section with your token swapping strategy
+
+# WandB tracking
+wandb:
+  tags: ["experiment", "swap_unbiased_speaker", "kobart"]
+  notes: "Unbiased speaker swapping experiment - no specific names"
+# =============================================================================
+# EXPERIMENT METADATA
+# =============================================================================
+experiment_name: "swap_unbiased_speaker"
+
+
 preprocessing:
   token_swapping:
     enable: true

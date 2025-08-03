@@ -1,11 +1,32 @@
+# FILE: configs/experiment/swap_regular_names.yaml
+# @package _global_
+# Override the preprocessing section with your token swapping strategy
+
+# WandB tracking
+wandb:
+  tags: ["experiment", "swap_regular_names", "kobart"]
+  notes: "Regular names swapping experiment - no specific names"
+# =============================================================================
+# EXPERIMENT METADATA
+# =============================================================================
+experiment_name: "swap_regular_names"
+
+
 preprocessing:
   token_swapping:
-    enable: true # Set to false to disable this feature
+    enable: true
     token_map:
-      "#Person1#": "민준"  # Min-jun (common male name)
-      "#Person2#": "서연"  # Seo-yeon (common female name)
-      "#Person3#": "지훈"  # Ji-hoon
-      "#Person4#": "수진"  # Su-jin
-      "#Person5#": "현우"  # Hyun-woo
-      "#Person6#": "은영"  # Eun-young
-      "#Person7#": "동현"  # Dong-hyun
+      "#Person1#": "화자1"  # Speaker 1
+      "#Person2#": "화자2"  # Speaker 2
+      "#Person3#": "화자3"
+      "#Person4#": "화자4"
+      "#Person5#": "화자5"
+      "#Person6#": "화자6"
+      "#Person7#": "화자7"
+
+# ✅ ADD THIS BLOCK if you want this experiment
+# to use different training settings.
+# training:
+#   max_epochs: 20
+#   optimizer:
+#     lr: 2e-5

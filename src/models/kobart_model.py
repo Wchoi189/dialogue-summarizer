@@ -211,7 +211,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         """Calculate ROUGE scores for a single sample."""
         try:
             # ✅ Import and use the new centralized function from metrics.py
-            from src.evaluation.metrics import calculate_rouge_scores
+            from evaluation.metrics import calculate_rouge_scores
             scores = calculate_rouge_scores(
                 predictions=[prediction],
                 references=[reference],

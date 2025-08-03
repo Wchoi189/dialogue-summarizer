@@ -25,7 +25,7 @@ class DialogueDataset(Dataset):
         self,
         data: pd.DataFrame,
         preprocessor: DialoguePreprocessor,
-        cfg: DictConfig,
+        cfg: DictConfig, # expects dataset config block
         split: str = "train",
         is_inference: bool = False
     ):
@@ -123,7 +123,7 @@ class TrainingDataset(DialogueDataset):
         self,
         data: pd.DataFrame,
         preprocessor: DialoguePreprocessor,
-        cfg: DictConfig
+        cfg: DictConfig  # This cfg is the DATASET config block
     ):
         """
         Initialize training dataset.
@@ -132,6 +132,7 @@ class TrainingDataset(DialogueDataset):
             data=data,
             preprocessor=preprocessor,
             cfg=cfg,
+            # cfg=cfg.preprocessing,
             split="train",
             is_inference=False
         )
@@ -157,6 +158,7 @@ class ValidationDataset(DialogueDataset):
             data=data,
             preprocessor=preprocessor,
             cfg=cfg,
+            # cfg=cfg.preprocessing,
             split="dev",
             is_inference=False
         )
@@ -182,6 +184,7 @@ class InferenceDataset(DialogueDataset):
             data=data,
             preprocessor=preprocessor,
             cfg=cfg,
+            # cfg=cfg.preprocessing,
             split="test",
             is_inference=True
         )
@@ -258,18 +261,23 @@ def create_datasets(
     Create datasets for training, validation, and testing.
     """
     datasets = {}
-    
+
+    # The cfg object here is the full config, so we need to pass
+    # the specific 'dataset' block to our dataset classes.
+    # The DialogueDataset class expects to be initialized with the dataset block of your config, which contains the columns mappings.
+    dataset_cfg = cfg.dataset
+
     if train_data is not None:
         ic(f"Creating training dataset: {len(train_data)} samples")
-        datasets["train"] = TrainingDataset(train_data, preprocessor, cfg)
+        datasets["train"] = TrainingDataset(train_data, preprocessor, dataset_cfg)
     
     if val_data is not None:
         ic(f"Creating validation dataset: {len(val_data)} samples")
-        datasets["val"] = ValidationDataset(val_data, preprocessor, cfg)
+        datasets["val"] = ValidationDataset(val_data, preprocessor, dataset_cfg)
     
     if test_data is not None:
         ic(f"Creating inference dataset: {len(test_data)} samples")
-        datasets["test"] = InferenceDataset(test_data, preprocessor, cfg)
+        datasets["test"] = InferenceDataset(test_data, preprocessor, dataset_cfg)
     
     ic(f"Created {len(datasets)} datasets")
     return datasets

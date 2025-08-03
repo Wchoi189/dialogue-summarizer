@@ -436,11 +436,6 @@ def cli():
     help='Name of an experiment to run (uses the centralized config).'
 )
 @click.option(
-    '--config-name', 
-    default=None, 
-    help='Name of a specific config file to use for backward compatibility.'
-)
-@click.option(
     '--resume-from', 
     type=click.Path(exists=True), 
     help='Checkpoint to resume from'

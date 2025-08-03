@@ -109,3 +109,8 @@ debug2.csv
 debug3.csv
 debug4.csv
 test_summary_fix.csv
+remove_marker_manual.csv
+remove_marker_regex.csv
+remove_marker_regex_config.csv
+remove_marker_true_3.csv
+remove_marker_true_4.csv

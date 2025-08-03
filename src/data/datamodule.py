@@ -65,7 +65,7 @@ class DialogueDataModule(pl.LightningDataModule):
             ic(f"Test data loaded: {len(self.test_data)} samples")
         
         self.datasets = create_datasets(
-            cfg=self.cfg.dataset,
+            cfg=self.cfg,
             preprocessor=self.preprocessor,
             train_data=self.train_data,
             val_data=self.val_data,

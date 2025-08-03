@@ -18,12 +18,15 @@ logger = logging.getLogger(__name__)
 
 
 class DialoguePreprocessor:
-    def __init__(self, preprocessing_cfg: DictConfig, tokenizer: PreTrainedTokenizerFast):
-        self.cfg = preprocessing_cfg
+    # ✅ Change the __init__ signature to accept the full config
+    def __init__(self, cfg: DictConfig, tokenizer: PreTrainedTokenizerFast):
+        """Initializes the preprocessor with the full configuration."""
+        self.cfg = cfg
+        # We get the specific preprocessing block from the full cfg
+        self.preprocessing_cfg = cfg.preprocessing 
         self.tokenizer = tokenizer
-        self.token_swap_cfg = self.cfg.get("token_swapping", {"enable": False})
+        self.token_swap_cfg = self.preprocessing_cfg.get("token_swapping", {"enable": False})
         
-        # This will now conditionally add tokens
         self._setup_special_tokens()
         
         ic(f"DialoguePreprocessor initialized with {len(self.tokenizer)} tokens")
@@ -152,4 +155,5 @@ def create_preprocessor(cfg: DictConfig) -> DialoguePreprocessor:
     ic(f"Loading tokenizer: {model_name}")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     
-    return DialoguePreprocessor(cfg.preprocessing, tokenizer)
+    # Pass the ENTIRE config object, not just a subsection
+    return DialoguePreprocessor(cfg, tokenizer)
