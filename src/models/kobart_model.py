@@ -210,13 +210,18 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
     def _calculate_sample_rouge(self, prediction: str, reference: str) -> Dict[str, Any]:
         """Calculate ROUGE scores for a single sample."""
         try:
-            from evaluation.metrics import RougeCalculator
-            calculator = RougeCalculator()
-            scores = calculator.calculate_rouge([prediction], [reference], average=True)
+            # ✅ Import and use the new centralized function from metrics.py
+            from src.evaluation.metrics import calculate_rouge_scores
+            scores = calculate_rouge_scores(
+                predictions=[prediction],
+                references=[reference],
+                average=True
+            )
+            assert isinstance(scores, dict)
             return scores
         except Exception as e:
-            ic(f"Failed to calculate ROUGE: {e}")
-        return {"rouge1_f": 0.0, "rouge2_f": 0.0, "rougeL_f": 0.0}
+            ic(f"Failed to calculate ROUGE for validation sample: {e}")
+            return {"rouge1_f": 0.0, "rouge2_f": 0.0, "rougeL_f": 0.0}
     
     def on_validation_epoch_start(self):
         """Called at the start of validation epoch."""
@@ -240,37 +245,5 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
                 ic(f"Single logger type: {type(self.logger)}")
                 if hasattr(self.logger, 'experiment'): 
                     ic(f"Logger experiment type: {type(self.logger.experiment)}")
-        # Log additional media/artifacts
-        # if hasattr(self.trainer, 'loggers'):
-        #     wandb_logger = None
-        #     for logger in self.trainer.loggers:
-        #         if hasattr(logger, 'experiment') and hasattr(logger.experiment, 'log'):
-        #             wandb_logger = logger
-        #     if wandb_logger:
-        #         try:
-        #             # Log training curves as an image
-        #             if self.current_epoch > 0:
-        #                 # Create a simple plot of training progress
-        #                 import matplotlib.pyplot as plt
-                        
-        #                 epochs = list(range(self.current_epoch + 1))
-        #                 # You'd need to track these metrics in your training
-        #                 # This is just an example
-                        
-        #                 fig, ax = plt.subplots(figsize=(10, 6))
-        #                 ax.set_title("Training Progress")
-        #                 ax.set_xlabel("Epoch")
-        #                 ax.set_ylabel("Loss")
-                        
-        #                 # Log the plot
-        #                 wandb_logger.experiment.log({
-        #                     "training_progress": wandb.Image(fig)
-        #                 })
-        #                 plt.close(fig)
-                        
-        #                 ic("✅ Logged training progress chart")
-                    
-        #         except Exception as e:
-        #             ic(f"Failed to log additional media: {e}")
-        
+      
         super().on_validation_epoch_end()

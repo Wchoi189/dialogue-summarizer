@@ -16,6 +16,19 @@ run_name: null  # Auto-generated
 seed: 42
 
 # =============================================================================
+# EXPERIMENT TRACKING
+# =============================================================================
+wandb:
+  project: "dialogue-summarization(wb2x)"
+  entity: "boot_camp_13_2nd_group_2nd"
+  username: "wchoi189@gmail.com"
+  tags: ["baseline", "kobart", "centralized"]
+  notes: "Using config-baseline-centralized.yaml"
+  offline: false
+  log_model: false
+  watch: false
+
+# =============================================================================
 # DATA CONFIGURATION
 # =============================================================================
 dataset:
@@ -86,7 +99,7 @@ model:
 
   
 # =============================================================================
-# TEXT PROCESSING CONFIGURATION
+# PRE PROCESSING CONFIGURATION
 # =============================================================================
 
 preprocessing:
@@ -127,7 +140,7 @@ postprocessing:
     remove_empty_lines: true
   
   korean_specific:
-    remove_special_markers: true  # Keep #Person# for structure
+    remove_special_markers: true  # use false to keep #Person# for structure
     normalize_punctuation: true
 # =============================================================================
 # TRAINING CONFIGURATION
@@ -214,18 +227,6 @@ generation:
   top_k: 50
   top_p: 1.0
   
-# =============================================================================
-# EXPERIMENT TRACKING
-# =============================================================================
-wandb:
-  project: "dialogue-summarization(wb2x)"
-  entity: "boot_camp_13_2nd_group_2nd"
-  username: "wchoi189@gmail.com"
-  tags: ["baseline", "kobart", "centralized"]
-  notes: "Using config-baseline-centralized.yaml"
-  offline: false
-  log_model: false
-  watch: false
 
 # =============================================================================
 # OUTPUT DIRECTORIES

@@ -398,30 +398,24 @@ class DialoguePredictor:
         return result_df
 
 
-def create_predictor(
-    model_path: str,
-    cfg: DictConfig,
-    device: Optional[str] = None
-) -> DialoguePredictor:
-    """
-    Create predictor from model checkpoint.
-    
-    Args:
-        model_path: Path to model checkpoint
-        cfg: Configuration
-        device: Device to use
+     # ✅ ADD THE @classmethod DECORATOR AND CHANGE THE FIRST ARGUMENT TO `cls`
+    @classmethod
+    def create_predictor(
+        cls,  # The first argument is now the class itself
+        model_path: str,
+        cfg: DictConfig,
+        device: Optional[str] = None
+    ) -> "DialoguePredictor": # Use quotes for forward reference to the class
+        """
+        Create predictor from model checkpoint.
+        """
+        from models.kobart_model import KoBARTSummarizationModel
         
-    Returns:
-        Predictor instance
-    """
-    from models.kobart_model import KoBARTSummarizationModel
-    
-    # Load model from checkpoint
-    # (Let PyTorch Lightning handle the config loading):
-    model = KoBARTSummarizationModel.load_from_checkpoint(
-    model_path
-    )
-    # Create predictor
-    predictor = DialoguePredictor(model, cfg, device)
-    
-    return predictor
+        model = KoBARTSummarizationModel.load_from_checkpoint(
+            model_path
+        )
+        
+        # ✅ Use `cls` to create the new instance
+        predictor = cls(model, cfg, device)
+        
+        return predictor 

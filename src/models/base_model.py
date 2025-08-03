@@ -16,7 +16,7 @@ from torch.optim import AdamW
 from transformers import get_cosine_schedule_with_warmup
 from postprocessing.postprocessing import apply_post_processing
 from utils.config_utils import ConfigManager
-from evaluation.metrics import RougeCalculator
+from evaluation.metrics import calculate_rouge_scores 
 
 class BaseSummarizationModel(pl.LightningModule, ABC):
     """Base class for dialogue summarization models."""
@@ -32,7 +32,6 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         self.validation_step_outputs: List[Dict] = []
         self.test_step_outputs: List[Dict] = []
         self._logged_postprocessing_stages = set()
-        self.rouge_calculator = RougeCalculator()
         self.config_manager = ConfigManager()
 
         # Core Components (to be initialized by subclass)
@@ -51,6 +50,19 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
         """Setup tokenizer. Must be implemented by subclasses."""
         pass
 
+    def _calculate_metrics(self, predictions: list, targets: list) -> Dict[str, float]:
+        """Calculates averaged ROUGE scores for a batch of predictions and targets."""
+        
+        # This function is now simplified to always return an averaged dictionary.
+        rouge_scores = calculate_rouge_scores(
+            predictions=predictions,
+            references=targets,
+            average=True  # Always request the averaged result
+        )
+        
+        # The `isinstance` check is no longer needed because the return type is guaranteed.
+        return rouge_scores
+    
     def forward(self, **kwargs: torch.Tensor) -> Any:
         """Forward pass through the model."""
         assert self.model is not None, "Model not initialized."
@@ -187,7 +199,7 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
 
        
         if all_targets:
-            rouge_scores = self.rouge_calculator.calculate_rouge(all_predictions, all_targets)
+            rouge_scores = self._calculate_metrics(all_predictions, all_targets)
             
             # Filter for scalar metrics before logging
             scalar_rouge_scores = {k: v for k, v in rouge_scores.items() if not isinstance(v, list)}
@@ -208,15 +220,15 @@ class BaseSummarizationModel(pl.LightningModule, ABC):
 
         try:
             table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1", "ROUGE-2", "ROUGE-L"])
-            
-            # Log up to 5 samples from the validation set
             for i in range(min(len(predictions), 5)):
                 # Calculate ROUGE scores for each individual sample
-                sample_rouge = self.rouge_calculator.calculate_rouge(
+                sample_rouge = self._calculate_metrics(
                     predictions=[predictions[i]],
-                    references=[targets[i]]
-                )
-                
+                    targets=[targets[i]],
+        
+            )
+    
+            
                 table.add_data(
                     self.current_epoch,
                     inputs[i],

@@ -264,3 +264,21 @@ python scripts/train.py train \
 
 # NEW WAY (clear experiment definition):
 python scripts/train.py train --experiment aggressive
+
+# =============================================================================
+# 11. DATA ANALYSIS SCRIPT
+# =============================================================================
+
+You can now run these functions directly from your terminal.
+
+**To see statistics about your validation set:**
+
+```bash
+python scripts/analyze_data.py analyze --split val
+```
+
+**To print the 5th sample from the training set:**
+
+```bash
+python scripts/analyze_data.py sample --split train --index 4
+```
