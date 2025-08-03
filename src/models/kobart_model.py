@@ -18,6 +18,9 @@ if TYPE_CHECKING:
 
 class KoBARTSummarizationModel(BaseSummarizationModel):
     """KoBART-specific implementation of the BaseSummarizationModel."""
+    
+    # ADD THIS TYPE HINT
+    model: BartForConditionalGeneration
 
     def __init__(self, cfg: DictConfig):
         """Initializes the tokenizer, model, and resizes embeddings."""
@@ -62,9 +65,20 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         # This assertion informs Pylance that the tokenizer is now valid
         assert self.tokenizer is not None, "Tokenizer failed to load from pretrained."
         
-        special_tokens_list = self.cfg.dataset.preprocessing.get("special_tokens", [])
+        # BEFORE:
+        # special_tokens_list = self.cfg.preprocessing.get("special_tokens", [])
+
+        # AFTER (✅ Add this logic to handle old and new checkpoints)
+        if hasattr(self.cfg, "preprocessing"):
+            # For new checkpoints with the centralized structure
+            special_tokens_list = self.cfg.preprocessing.get("special_tokens", [])
+        else:
+            # Fallback for old checkpoints with the nested structure
+            special_tokens_list = self.cfg.dataset.preprocessing.get("special_tokens", [])
+
         if special_tokens_list:
             self.tokenizer.add_tokens([str(t) for t in special_tokens_list])
+
 
     def _setup_model(self) -> None:
         """Initializes the BART model."""

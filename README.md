@@ -59,6 +59,19 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     # For inference
     python scripts/inference.py submission /path/to/model.ckpt --override postprocessing=aggressive
     python scripts/inference.py submission /path/to/best/model.ckpt --override postprocessing=aggressive
+    
+    # For prediction
+    python scripts/inference.py predict \
+    *0.1384*.ckpt \
+    data/dev.csv \
+    test_summary_fix.csv
+
+    # (DEPRECATED) For prediction (before using centralized config)
+    python scripts/inference.py predict \
+    /home/wb2x/workspace/dialogue-summarizer/outputs/models/best-epoch=01-val_rouge_f=val/rouge_f=0.1384.ckpt \
+    data/dev.csv \
+    test_summary_fix.csv \
+    --config-name config-baseline-centralized
     ```
 
 4.  **Generate Predictions**

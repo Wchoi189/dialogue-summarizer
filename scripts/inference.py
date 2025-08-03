@@ -82,9 +82,15 @@ class InferenceRunner:
         
         # Load model
         ic("Loading model from checkpoint...")
+        # Before (Remove the cfg argument due to struct error.)
+        # model = KoBARTSummarizationModel.load_from_checkpoint(
+        #     checkpoint_path,
+        #     cfg=self.cfg
+        # )
+
+        # AFTER (loads checkpoint without passing any extra arguments)
         model = KoBARTSummarizationModel.load_from_checkpoint(
-            checkpoint_path,
-            cfg=self.cfg
+            checkpoint_path
         )
         
         # Create predictor
@@ -237,7 +243,8 @@ def cli():
 @click.argument('checkpoint_path', type=click.Path(exists=True))
 @click.argument('test_file', type=click.Path(exists=True))
 @click.argument('output_file', type=click.Path())
-@click.option('--config-name', default='config', help='Configuration name')
+# @click.option('--config-name', default='config', help='Configuration name') # Uncomment for phase specific config loading
+@click.option('--config-name', default='config-baseline-centralized', help='Configuration name')
 @click.option('--config-path', type=click.Path(), help='Custom config directory')
 @click.option('--batch-size', type=int, help='Override evaluation batch size')
 @click.option(

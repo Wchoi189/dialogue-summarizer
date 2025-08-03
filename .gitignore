@@ -102,3 +102,10 @@ simple_train_test.py
 libstdc++.so.6.0.34
 environment.bk.yml
 submission*.csv
+.github/
+CHANGELOG.md
+debug.csv
+debug2.csv
+debug3.csv
+debug4.csv
+test_summary_fix.csv

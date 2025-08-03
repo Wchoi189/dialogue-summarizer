@@ -5,8 +5,7 @@ Handles model loading, prediction generation, and output processing.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
-
+from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 import pandas as pd
 import torch
 from icecream import ic
@@ -19,7 +18,8 @@ from data.preprocessing import create_preprocessor
 from models.base_model import BaseSummarizationModel
 
 logger = logging.getLogger(__name__)
-
+if TYPE_CHECKING:
+    from wandb.sdk.wandb_run import Run as WandbRun
 
 class DialoguePredictor:
     """Predictor for dialogue summarization inference."""
@@ -119,7 +119,7 @@ class DialoguePredictor:
         
         # Generate
         with torch.no_grad():
-            outputs = self.model.generate(
+            outputs = self.model.model.generate(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 **self.generation_config
@@ -127,9 +127,13 @@ class DialoguePredictor:
         
         # Decode output
         generated_ids = outputs[0] if len(outputs.shape) > 1 else outputs
+        
+        # Get the setting from the config, defaulting to False for safety
+        skip_tokens = self.cfg.postprocessing.get("skip_special_tokens", False)
+
         summary = self.preprocessor.decode_outputs(
             generated_ids.cpu().tolist(),
-            skip_special_tokens=True
+            skip_special_tokens=skip_tokens  # Use the variable from the config
         )
         
         # Post-process
@@ -155,8 +159,11 @@ class DialoguePredictor:
             List of generated summaries
         """
         if batch_size is None:
-            batch_size = self.inference_cfg.batch_size
-        
+             # BEFORE: (modular config, phase specific)
+            # batch_size = self.inference_cfg.batch_size
+            
+            # AFTER (✅ Change this line):
+            batch_size = self.cfg.dataset.eval_batch_size        
         # Ensure batch_size is not None
         if batch_size is None:
             batch_size = 1
@@ -185,34 +192,40 @@ class DialoguePredictor:
             summaries=None,
             is_inference=True
         )
+        # BEFORE
+        # # Convert to tensors
+        # input_ids = torch.nn.utils.rnn.pad_sequence(
+        #     [torch.tensor(ids) for ids in batch_inputs.input_ids],
+        #     batch_first=True,
+        #     padding_value=self.preprocessor.tokenizer.pad_token_id or 0
+        # ).to(self.device)
         
-        # Convert to tensors
-        input_ids = torch.nn.utils.rnn.pad_sequence(
-            [torch.tensor(ids) for ids in batch_inputs["input_ids"]],
-            batch_first=True,
-            padding_value=self.preprocessor.tokenizer.pad_token_id or 0
-        ).to(self.device)
-        
-        attention_mask = torch.nn.utils.rnn.pad_sequence(
-            [torch.tensor(mask) for mask in batch_inputs["attention_mask"]],
-            batch_first=True,
-            padding_value=0
-        ).to(self.device)
-        
+        # attention_mask = torch.nn.utils.rnn.pad_sequence(
+        #     [torch.tensor(mask) for mask in batch_inputs.attention_mask],
+        #     batch_first=True,
+        #     padding_value=0
+        # ).to(self.device)
+
+        # AFTER (✅ Use the tensors from the preprocessor directly)
+        input_ids = torch.tensor(batch_inputs["input_ids"]).to(self.device)
+        attention_mask = torch.tensor(batch_inputs["attention_mask"]).to(self.device)
+             
         # Generate
         with torch.no_grad():
-            outputs = self.model.generate(
+            outputs = self.model.model.generate(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 **self.generation_config
             )
-        
+        # Get the setting from the config, defaulting to False for safety
+        skip_tokens = self.cfg.postprocessing.get("skip_special_tokens", False)
+
         # Decode outputs
         summaries = []
         for output in outputs:
             summary = self.preprocessor.decode_outputs(
                 output.cpu().tolist(),
-                skip_special_tokens=True
+                skip_special_tokens=skip_tokens
             )
             summary = self._post_process_output(summary)
             summaries.append(summary)
@@ -285,40 +298,7 @@ class DialoguePredictor:
         file_manager.save_csv(predictions_df, output_path)
         ic(f"Saved predictions to {output_file}")
     
-    def _post_process_output(self, text: str) -> str:
-        """
-        Post-process generated text using dedicated config.
-        
-        Args:
-            text: Generated text
-            
-        Returns:
-            Post-processed text
-        """
-        # ✅ Use the same post-processing logic as training
-        post_cfg = self.cfg.get("postprocessing", {})
-        
-        if not post_cfg:
-            # Fallback to old inference config if post_processing config not found
-            post_cfg = self.inference_cfg.get("postprocessing", {})
-        
-        # Apply the same post-processing logic
-        return self._apply_comprehensive_post_processing(text, post_cfg)
-
-    def _apply_comprehensive_post_processing(self, text: str, post_cfg: dict) -> str:
-        """Apply comprehensive post-processing (same logic as base_model.py)."""
-        
-        # 1. Remove unwanted tokens
-        remove_tokens = post_cfg.get("remove_tokens", [])
-        for token in remove_tokens:
-            text = text.replace(token, "")
-        
-        # 2. Text cleaning
-        text_cleaning = post_cfg.get("text_cleaning", {})
-        
-        if text_cleaning.get("strip_whitespace", True):
-            text = text.strip()
-        
+  
         if text_cleaning.get("normalize_whitespace", True):
             import re
             text = re.sub(r'\s+', ' ', text)
@@ -400,6 +380,8 @@ class DialoguePredictor:
         all_predictions = []
         all_sample_ids = []
         
+        # Get the setting from the config, defaulting to False for safety
+        skip_tokens = self.cfg.postprocessing.get("skip_special_tokens", False)
         with torch.no_grad():
             for batch in tqdm(dataloader, desc="Inference"):
                 # Move batch to device
@@ -408,7 +390,7 @@ class DialoguePredictor:
                 sample_ids = batch["sample_ids"]
                 
                 # Generate
-                outputs = self.model.generate(
+                outputs = self.model.model.generate(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     **self.generation_config
@@ -418,7 +400,7 @@ class DialoguePredictor:
                 for i, output in enumerate(outputs):
                     summary = self.preprocessor.decode_outputs(
                         output.cpu().tolist(),
-                        skip_special_tokens=True
+                        skip_special_tokens=skip_tokens
                     )
                     summary = self._post_process_output(summary)
                     

@@ -1,7 +1,8 @@
 # @package _global_
 # CENTRALIZED CONFIGURATION - configs/config.yaml
 # Single source of truth for all settings
-
+# Use experiment configs for overrides
+# If overrides are needed, define experiment in defaults below
 defaults:
   - _self_  # This config has highest priority
   - experiment: baseline  # Load experiment-specific overrides
@@ -26,24 +27,24 @@ dataset:
     test: "test.csv"
     submission_template: "sample_submission.csv"
 
-  preprocessing:
-    max_input_length: 512
-    max_target_length: 60
-    truncation: true
-    padding: false # Dynamic padding is handled by the collate function
-    normalize_whitespace: true
-    remove_extra_newlines: true 
-    special_tokens:
-      - "#Person1#"
-      - "#Person2#"
-      - "#Person3#"
-      - "#Person4#"
-      - "#Person5#"
-      - "#Person6#"
-      - "#Person7#"    
-      - "#PhoneNumber#"
-      - "#Address#"
-      - "#PassportNumber#"
+  # preprocessing:
+  #   max_input_length: 512
+  #   max_target_length: 60
+  #   truncation: true
+  #   padding: false # Dynamic padding is handled by the collate function
+  #   normalize_whitespace: true
+  #   remove_extra_newlines: true 
+  #   special_tokens:
+  #     - "#Person1#"
+  #     - "#Person2#"
+  #     - "#Person3#"
+  #     - "#Person4#"
+  #     - "#Person5#"
+  #     - "#Person6#"
+  #     - "#Person7#"    
+  #     - "#PhoneNumber#"
+  #     - "#Address#"
+  #     - "#PassportNumber#"
 
 
   # Column mappings
@@ -88,8 +89,46 @@ model:
 # TEXT PROCESSING CONFIGURATION
 # =============================================================================
 
-## Moved to DATA CONFIGURATION
+preprocessing:
+  strategy: "std" # From standard.yaml
+  max_input_length: 512
+  max_target_length: 60
+  truncation: true
+  padding: false # Dynamic padding is handled by the collate function
+  normalize_whitespace: true
+  remove_extra_newlines: true 
+  special_tokens:
+    - "#Person1#"
+    - "#Person2#"
+    - "#Person3#"
+    - "#Person4#"
+    - "#Person5#"
+    - "#Person6#"
+    - "#Person7#"    
+    - "#PhoneNumber#"
+    - "#Address#"
+    - "#PassportNumber#"
 
+# =============================================================================
+# POSTPROCESSING CONFIGURATION
+# =============================================================================
+postprocessing:
+  skip_special_tokens: false
+  remove_tokens:
+    - "<usr>"
+    - "<s>"
+    - "</s>"
+    - "<pad>"
+    - "<unk>"
+
+  text_cleaning:
+    strip_whitespace: true
+    normalize_whitespace: true
+    remove_empty_lines: true
+  
+  korean_specific:
+    remove_special_markers: true  # Keep #Person# for structure
+    normalize_punctuation: true
 # =============================================================================
 # TRAINING CONFIGURATION
 # =============================================================================

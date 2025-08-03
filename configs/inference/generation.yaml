@@ -17,63 +17,63 @@ generation:
   min_length: 10
   max_new_tokens: null  # Use max_length instead
   
-  # Beam search
-  num_beams: 4
-  num_beam_groups: 1
-  diversity_penalty: 0.0
+#   # Beam search
+#   num_beams: 4
+#   num_beam_groups: 1
+#   diversity_penalty: 0.0
   
-  # Sampling
-  do_sample: false
-  temperature: 1.0
-  top_k: 50
-  top_p: 1.0
+#   # Sampling
+#   do_sample: false
+#   temperature: 1.0
+#   top_k: 50
+#   top_p: 1.0
   
-  # Repetition control
-  repetition_penalty: 1.4
-  no_repeat_ngram_size: 3
-  encoder_no_repeat_ngram_size: 0
+#   # Repetition control
+#   repetition_penalty: 1.4
+#   no_repeat_ngram_size: 3
+#   encoder_no_repeat_ngram_size: 0
   
-  # Early stopping
-  early_stopping: true
-  length_penalty: 1.0
+#   # Early stopping
+#   early_stopping: true
+#   length_penalty: 1.0
   
-  # Special tokens
-  pad_token_id: null  # Will be set from tokenizer
-  bos_token_id: null
-  eos_token_id: null
+#   # Special tokens
+#   pad_token_id: null  # Will be set from tokenizer
+#   bos_token_id: null
+#   eos_token_id: null
   
-  # Output control
-  output_attentions: false
-  output_hidden_states: false
-  output_scores: false
-  return_dict_in_generate: true
+#   # Output control
+#   output_attentions: false
+#   output_hidden_states: false
+#   output_scores: false
+#   return_dict_in_generate: true
 
-# ✅ REMOVED: post_processing section (now in dedicated config)
+# # ✅ REMOVED: post_processing section (now in dedicated config)
 
-# Output settings
-output:
-  save_predictions: true
-  save_raw_outputs: false
-  save_generation_config: true
+# # Output settings
+# output:
+#   save_predictions: true
+#   save_raw_outputs: false
+#   save_generation_config: true
   
-  # File formats
-  prediction_file: "predictions_inf.csv"
-  submission_file: "submission_inf.csv"
+#   # File formats
+#   prediction_file: "predictions_inf.csv"
+#   submission_file: "submission_inf.csv"
   
-  # Include metadata
-  include_scores: false
-  include_input: false
-  include_generation_time: true
+#   # Include metadata
+#   include_scores: false
+#   include_input: false
+#   include_generation_time: true
 
-# Hardware settings
-device: "auto"
-half_precision: false  # Use fp16 for inference
-compile_model: false
+# # Hardware settings
+# device: "auto"
+# half_precision: false  # Use fp16 for inference
+# compile_model: false
 
-# Progress tracking
-show_progress: true
-log_every_n_batches: 10
+# # Progress tracking
+# show_progress: true
+# log_every_n_batches: 10
 
-# Error handling
-skip_errors: false
-max_errors: 10
+# # Error handling
+# skip_errors: false
+# max_errors: 10

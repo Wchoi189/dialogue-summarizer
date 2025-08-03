@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import pandas as pd
 from icecream import ic
 from omegaconf import DictConfig
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerFast
 from transformers.tokenization_utils_base import BatchEncoding
 from transformers.tokenization_utils import PreTrainedTokenizer
 import transformers
@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 class DialoguePreprocessor:
     """Enhanced preprocessor for Korean dialogue data."""
     
-    def __init__(self, dataset_cfg: DictConfig, tokenizer: PreTrainedTokenizer):
+    # def __init__(self, dataset_cfg: DictConfig, tokenizer: PreTrainedTokenizer):
+    def __init__(self, preprocessing_cfg: DictConfig, tokenizer: PreTrainedTokenizerFast):
         """
         Initialize preprocessor with configuration and tokenizer.
         
@@ -30,10 +31,15 @@ class DialoguePreprocessor:
             dataset_cfg: Dataset configuration (not full config)
             tokenizer: Pre-trained tokenizer
         """
-        self.dataset_cfg = dataset_cfg
+        # self.dataset_cfg = dataset_cfg
+        self.dataset_cfg = preprocessing_cfg
         self.tokenizer = tokenizer
         
-        self.preprocessing_cfg = dataset_cfg.preprocessing
+        # BEFORE:
+        # self.preprocessing_cfg = dataset_cfg.preprocessing
+
+        # AFTER (✅ The correct config is now passed directly)
+        self.preprocessing_cfg = preprocessing_cfg
         
         # Add special tokens to tokenizer
         self._setup_special_tokens()
@@ -258,9 +264,22 @@ class DialoguePreprocessor:
         """
         ic(f"Preprocessing batch of {len(dialogues)} samples")
 
-        
+        # Before
+        # model_inputs = self.tokenizer(
+        #     # processed_dialogues,
+        #     max_length=self.preprocessing_cfg.max_input_length,
+        #     truncation=True,
+        #     padding=True, # Padding is handled by the tokenizer for the whole batch
+        #     return_tensors="pt"
+        # )
+
+        # After
+        # Make sure you are processing the dialogues before tokenizing
+        processed_dialogues = [self.preprocess_dialogue(d) for d in dialogues]
+
+        # ✅ FIX: Uncomment the input and use the 'text=' keyword
         model_inputs = self.tokenizer(
-            # processed_dialogues,
+            text=processed_dialogues,
             max_length=self.preprocessing_cfg.max_input_length,
             truncation=True,
             padding=True, # Padding is handled by the tokenizer for the whole batch
@@ -403,7 +422,11 @@ def create_preprocessor(cfg: DictConfig, model_name: Optional[str] = None) -> Di
     ic(f"Loading tokenizer: {model_name}")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     # ✅ CHANGE: Use dataset config instead of preprocessing config
-    return DialoguePreprocessor(cfg.dataset, tokenizer)  # Changed from cfg to cfg.dataset
+    # BEFORE:
+    # return DialoguePreprocessor(cfg.dataset, tokenizer)
+
+    # AFTER (✅ Pass the correct config block)
+    return DialoguePreprocessor(cfg.preprocessing, tokenizer)
 
 
 def preprocess_submission_data(
