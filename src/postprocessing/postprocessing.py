@@ -53,6 +53,7 @@ def apply_post_processing(text: str, post_cfg: Dict) -> str:
     Applies a full pipeline of post-processing steps based on a configuration dictionary.
     """
     # 1. Remove special tokens defined in the config
+    # This removes tokens like <s> and </s>
     remove_tokens = post_cfg.get("remove_tokens", [])
     for token in remove_tokens:
         text = text.replace(token, "")
@@ -66,13 +67,11 @@ def apply_post_processing(text: str, post_cfg: Dict) -> str:
     
     # 3. Korean-specific cleaning
     korean_cfg = post_cfg.get("korean_specific", {})
+    # This section handles the removal of a specific set of tokens.
     if korean_cfg.get("remove_special_markers", True):
-        # This regex removes markers like #Address# but keeps #Person1#, #Person2#, etc.
-        # BEFORE:
-        # text = re.sub(r'#(?!Person\d+#)\w+#', '', text)
-
-        # AFTER (✅ Use this simpler regex to remove ALL #word# tokens):
-        text = re.sub(r'#\w+#', '', text)        
+        # We use a single, comprehensive regex to remove only the tokens we don't want.
+        # This regex removes #PhoneNumber#, #Address#, etc. but keeps #PersonN# tokens for now.
+        text = re.sub(r'#(?!(Person\d+|PhoneNumber|Address|PassportNumber)#)\w+#', '', text)
         text = ' '.join(text.split())
 
     # 4. Advanced cleaning using helper functions
@@ -82,12 +81,12 @@ def apply_post_processing(text: str, post_cfg: Dict) -> str:
     if advanced_cfg.get("fix_incomplete_sentences", True):
         text = _fix_incomplete_sentences(text)
 
-    # ✅ ADD THIS AS THE FINAL STEP BEFORE THE LENGTH CHECK
+    # 5. Reverse the token swap (this should happen BEFORE the final length check)
+    # This is where the new '화자' tokens are turned back into '#Person#' tokens.
     text = _swap_tokens_back(text, post_cfg)
-
-    # 5. Final check for minimum length
+    
+    # 6. Final check for minimum length
     min_length = post_cfg.get("advanced", {}).get("min_length", 5)
     if len(text.strip()) < min_length:
         return "요약을 생성할 수 없습니다."
-        
     return text.strip()

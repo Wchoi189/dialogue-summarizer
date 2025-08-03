@@ -77,24 +77,19 @@ class DialogueDataset(Dataset):
         """
         row = self.data.iloc[idx]
         dialogue = str(row[self.input_col])
-
+        sample = self.data.iloc[idx]
         # ✅ CORRECT: This finds "#Person1#" and replaces it with "화자1"
         # dialogue = dialogue.replace("#Person1#", "화자1").replace("#Person2#", "화자2").replace("#Person3#", "화자3")
 
         
-
+        # ✅ FIX: Apply token swapping to the dialogue text before tokenization
+        dialogue = self.preprocessor._swap_tokens(str(sample[self.cfg.columns.input]))
+        
+        # Get target if it exists
         summary = None
+        if self.cfg.columns.target in self.data.columns:
+            summary = self.preprocessor._swap_tokens(str(sample[self.cfg.columns.target]))     
 
-        # Vectorized implementation is not directly possible inside __getitem__,
-        # since __getitem__ operates on a single row (idx).
-        # However, you can preprocess the entire column in __init__ for efficiency.
-        if not self.is_inference and self.target_col in self.data.columns:
-            target_value = row[self.target_col]
-            # Ensure target_value is a scalar, not a Series
-            if isinstance(target_value, pd.Series):
-                target_value = target_value.iloc[0]
-            if not pd.isna(target_value):
-                summary = str(target_value)
         # Preprocess and tokenize
         inputs = self.preprocessor.prepare_inputs(
             dialogue=dialogue,

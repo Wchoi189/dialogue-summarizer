@@ -124,6 +124,8 @@ class DialoguePredictor:
         input_ids = torch.tensor(inputs["input_ids"]).unsqueeze(0).to(self.device)
         attention_mask = torch.tensor(inputs["attention_mask"]).unsqueeze(0).to(self.device)
         
+        # Add an assertion to satisfy the type checker
+        assert self.model is not None and self.model.model is not None, "Model or its internal model is not initialized."
         # Generate
         with torch.no_grad():
             outputs = self.model.model.generate(
@@ -199,20 +201,8 @@ class DialoguePredictor:
             summaries=None,
             is_inference=True
         )
-        # BEFORE
-        # # Convert to tensors
-        # input_ids = torch.nn.utils.rnn.pad_sequence(
-        #     [torch.tensor(ids) for ids in batch_inputs.input_ids],
-        #     batch_first=True,
-        #     padding_value=self.preprocessor.tokenizer.pad_token_id or 0
-        # ).to(self.device)
-        
-        # attention_mask = torch.nn.utils.rnn.pad_sequence(
-        #     [torch.tensor(mask) for mask in batch_inputs.attention_mask],
-        #     batch_first=True,
-        #     padding_value=0
-        # ).to(self.device)
-
+        # Add an assertion to satisfy the type checker
+        assert self.model is not None and self.model.model is not None, "Model or its internal model is not initialized."   
         # Use torch.as_tensor() to make the type clear to the linter
         input_ids = torch.as_tensor(batch_inputs["input_ids"]).to(self.device)
         attention_mask = torch.as_tensor(batch_inputs["attention_mask"]).to(self.device)
@@ -371,6 +361,8 @@ class DialoguePredictor:
                 attention_mask = batch["attention_mask"].to(self.device)
                 sample_ids = batch["sample_ids"]
                 
+                # Add an assertion to satisfy the type checker
+                assert self.model is not None and self.model.model is not None, "Model or its internal model is not initialized."
                 # Generate
                 outputs = self.model.model.generate(
                     input_ids=input_ids,

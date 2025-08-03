@@ -5,13 +5,13 @@
 # If overrides are needed, define experiment in defaults below
 defaults:
   - _self_  # This config has highest priority
-  - experiment: baseswap_regular_names  # Load experiment-specific overrides
+  - experiment: swap_regular_names  # Load experiment-specific overrides
   
 
 # =============================================================================
 # EXPERIMENT METADATA
 # =============================================================================
-experiment_name: "dialogue-summarization"
+experiment_name: "config-baseline-centralized--swap_regular_names"
 run_name: null  # Auto-generated
 seed: 42
 
@@ -22,8 +22,8 @@ wandb:
   project: "dialogue-summarization(wb2x)"
   entity: "boot_camp_13_2nd_group_2nd"
   username: "wchoi189@gmail.com"
-  tags: ["baseline", "kobart", "centralized"]
-  notes: "Using config-baseline-centralized.yaml"
+  tags: ["kobart", "centralized", "swap_regular_names"]
+  notes: "Main config: config-baseline-centralized.yaml and experiment: swap_regular_names"
   offline: false
   log_model: false
   watch: false
