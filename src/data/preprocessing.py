@@ -96,7 +96,7 @@ class DialoguePreprocessor:
         
         model_inputs = self.tokenizer(
             dialogue,
-            max_length=self.preprocessing_cfg.max_input_length,
+            max_length=self.cfg.preprocessing.max_input_length,
             truncation=True,
             padding=False,  # Padding is handled by the collate function
             return_tensors="pt" if not is_inference else None
@@ -128,7 +128,7 @@ class DialoguePreprocessor:
         
         model_inputs = self.tokenizer(
             text=processed_dialogues,
-            max_length=self.preprocessing_cfg.max_input_length,
+            max_length=self.cfg.preprocessing.max_input_length,
             truncation=True,
             padding=True, # Batch tokenization can handle padding directly
             return_tensors="pt"

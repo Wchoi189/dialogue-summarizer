@@ -34,6 +34,10 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     # Use minimal postprocessing for debugging
     python scripts/train.py train --config-name config --override postprocessing=minimal
 
+
+    python scripts/train.py train --config-name config-baseline-centralized --override experiment swap_regular_names --max-epochs 1
+
+
     ```
 
     **Debug training run**
@@ -63,9 +67,9 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     
     # For prediction
     python scripts/inference.py predict \
-    *0.1384*.ckpt \
+    /home/wb2x/workspace/dialogue-summarizer/outputs/models/best-epoch=03-val_rouge_f=val/rouge_f=0.4896.ckpt \
     data/dev.csv \
-    test_summary_fix.csv
+    subission11.csv
 
     # (DEPRECATED) For prediction (before using centralized config)
     python scripts/inference.py predict \

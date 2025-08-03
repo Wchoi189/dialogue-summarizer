@@ -1,3 +1,4 @@
+# FILE: configs/postprocessing/default.yaml
 # @package postprocessing
 # Post-processing configuration for text generation
 
@@ -20,7 +21,7 @@ remove_tokens:
 
 #   # ✅ NEW: Clean up extra colons and punctuation
 #   clean_extra_colons: true
-#   clean_repeated_punctuation: true  
+#   clean_repeated_punctuation: true
 
 # Korean-specific cleaning
 korean_specific:

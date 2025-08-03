@@ -1,27 +1,27 @@
-# @package postprocessing
-# Inference post-processing - clean final output
+# # @package postprocessing
+# # Inference post-processing - clean final output
 
-remove_tokens:
-  - "<usr>"
-  - "<s>"
-  - "</s>"
-  - "<pad>"
-  - "<unk>"
+# remove_tokens:
+#   - "<usr>"
+#   - "<s>"
+#   - "</s>"
+#   - "<pad>"
+#   - "<unk>"
 
-text_cleaning:
-  strip_whitespace: true
-  normalize_whitespace: true
-  remove_empty_lines: true
-  remove_extra_spaces: true
-  clean_extra_colons: true
-  clean_repeated_punctuation: true
+# text_cleaning:
+#   strip_whitespace: true
+#   normalize_whitespace: true
+#   remove_empty_lines: true
+#   remove_extra_spaces: true
+#   clean_extra_colons: true
+#   clean_repeated_punctuation: true
 
-korean_specific:
-  remove_special_markers: false
-  normalize_punctuation: true
+# korean_specific:
+#   remove_special_markers: false
+#   normalize_punctuation: true
 
-advanced:
-  min_length: 5
-  max_repetition_ratio: 0.3
-  remove_repetitive_phrases: true
-  clean_dialogue_artifacts: true
+# advanced:
+#   min_length: 5
+#   max_repetition_ratio: 0.3
+#   remove_repetitive_phrases: true
+#   clean_dialogue_artifacts: true

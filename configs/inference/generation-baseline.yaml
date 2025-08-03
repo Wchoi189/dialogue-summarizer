@@ -1,53 +1,53 @@
-# @package inference
-# BASELINE INFERENCE SETTINGS
+# # @package inference
+# # BASELINE INFERENCE SETTINGS
 
-# Model checkpoint
-checkpoint_path: null
-model_name_or_path: "digit82/kobart-summarization"
+# # Model checkpoint
+# checkpoint_path: null
+# model_name_or_path: "digit82/kobart-summarization"
 
-# ✅ BASELINE BATCH PROCESSING: Match baseline
-batch_size: 32          # Matches baseline inference batch_size
-num_workers: 4
-pin_memory: true
+# # ✅ BASELINE BATCH PROCESSING: Match baseline
+# batch_size: 32          # Matches baseline inference batch_size
+# num_workers: 4
+# pin_memory: true
 
-# ✅ BASELINE GENERATION: Exact match
-generation:
-  max_length: 100       # Matches generate_max_length
-  min_length: 1
-  num_beams: 4          # Exact match
-  no_repeat_ngram_size: 2  # Exact match
-  early_stopping: true # Exact match
-  do_sample: false
-  temperature: 1.0
-  top_k: 50
-  top_p: 1.0
-  repetition_penalty: 1.0
-  length_penalty: 1.0
+# # ✅ BASELINE GENERATION: Exact match
+# generation:
+#   max_length: 100       # Matches generate_max_length
+#   min_length: 1
+#   num_beams: 4          # Exact match
+#   no_repeat_ngram_size: 2  # Exact match
+#   early_stopping: true # Exact match
+#   do_sample: false
+#   temperature: 1.0
+#   top_k: 50
+#   top_p: 1.0
+#   repetition_penalty: 1.0
+#   length_penalty: 1.0
 
-# Output settings
-output:
-  save_predictions: true
-  save_raw_outputs: false
-  save_generation_config: true
+# # Output settings
+# output:
+#   save_predictions: true
+#   save_raw_outputs: false
+#   save_generation_config: true
   
-  # File formats
-  prediction_file: "predictions.csv"
-  submission_file: "submission.csv"
+#   # File formats
+#   prediction_file: "predictions.csv"
+#   submission_file: "submission.csv"
   
-  # Include metadata
-  include_scores: false
-  include_input: false
-  include_generation_time: true
+#   # Include metadata
+#   include_scores: false
+#   include_input: false
+#   include_generation_time: true
 
-# Hardware settings
-device: "auto"
-half_precision: false
-compile_model: false
+# # Hardware settings
+# device: "auto"
+# half_precision: false
+# compile_model: false
 
-# Progress tracking
-show_progress: true
-log_every_n_batches: 10
+# # Progress tracking
+# show_progress: true
+# log_every_n_batches: 10
 
-# Error handling
-skip_errors: false
-max_errors: 10
+# # Error handling
+# skip_errors: false
+# max_errors: 10

@@ -1,7 +1,7 @@
+# FILE: configs/preprocessing/standard.yaml
 # @package _global_
 # Standard preprocessing configuration for dialogue summarization
 
 preprocessing:
   # Processing strategy name
   strategy: "std"
-  

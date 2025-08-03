@@ -76,6 +76,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
             special_tokens_list = self.cfg.preprocessing.get("special_tokens", [])
         else:
             # Fallback for old checkpoints with the nested structure
+            # special_tokens_list = self.cfg.dataset.preprocessing.get("special_tokens", [])
             special_tokens_list = self.cfg.dataset.preprocessing.get("special_tokens", [])
 
         if special_tokens_list:
