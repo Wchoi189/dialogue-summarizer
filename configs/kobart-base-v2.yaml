@@ -9,6 +9,7 @@ defaults:
   - preprocessing: standard
   - postprocessing: default
   - pytorch: default
+  - experiment: baseline
   - _self_
 
 # Experiment settings

@@ -19,21 +19,21 @@ python scripts/train.py train --experiment production
 # 2. OVERRIDING SPECIFIC PARAMETERS
 # =============================================================================
 
-# Override learning rate for baseline experiment
-python scripts/train.py train --experiment baseline --learning-rate 1e-5
-
-# Override batch size
-python scripts/train.py train --experiment baseline --batch-size 32
-
-# Override max epochs
+# Override max_epochs using the new dedicated flag
 python scripts/train.py train --experiment baseline --max-epochs 12
 
-# Multiple simple overrides
+# Override batch_size using the new dedicated flag
+python scripts/train.py train --experiment baseline --batch-size 32
+
+# Override learning_rate using the --override syntax
+python scripts/train.py train --experiment baseline --override training.optimizer.lr=1e-5
+
+# Combine multiple overrides
 python scripts/train.py train \
     --experiment baseline \
-    --learning-rate 8e-6 \
+    --max-epochs 10 \
     --batch-size 24 \
-    --max-epochs 10
+    --override training.optimizer.lr=8e-6
 
 # =============================================================================
 # 3. ADVANCED CONFIG OVERRIDES (Using --override)

@@ -118,13 +118,13 @@ class DialogueTrainer:
             config_name=config_name,
             overrides=overrides or []
         )
-        # 2. ✨ MERGE USING YOUR EXISTING METHOD ✨
-        if 'experiment' in self.cfg:
-            # Use the merge method from your ConfigManager instance
-            self.cfg = self.config_manager.merge_configs(self.cfg, self.cfg.experiment)
+        # # 2. ✨ MERGE USING YOUR EXISTING METHOD ✨
+        # if 'experiment' in self.cfg:
+        #     # Use the merge method from your ConfigManager instance
+        #     self.cfg = self.config_manager.merge_configs(self.cfg, self.cfg.experiment)
             
-            # Clean up the now-redundant 'experiment' key
-            # del self.cfg['experiment']
+        #     # Clean up the now-redundant 'experiment' key
+        #     # del self.cfg['experiment']
         # CRITICAL: Setup PyTorch optimizations BEFORE any model/training code
         setup_pytorch_optimizations(self.cfg)    
 
@@ -425,6 +425,12 @@ def cli():
 
 @cli.command()
 @click.option(
+    '--config-name', 
+    # default='kobart-base-v2', 
+    default='config-baseline-centralized',
+    help='Name of the main configuration file to use.'
+)
+@click.option(
     '--experiment', 
     default=None, 
     help='Name of an experiment to run (uses the centralized config).'
@@ -445,13 +451,26 @@ def cli():
     multiple=True, 
     help='Custom Hydra overrides (e.g., "training.max_epochs=5")'
 )
-def train(experiment, config_name, resume_from, overrides):
+@click.option('--max-epochs', type=int, help='Override training.max_epochs')
+@click.option('--batch-size', type=int, help='Override dataset.batch_size')
+@click.option('--learning-rate', type=float, help='Override training.optimizer.lr')
+@click.option('--fast-dev-run', is_flag=True, help='Run a single batch for debugging')
+def train(experiment, config_name, resume_from, overrides, max_epochs, batch_size, learning_rate, fast_dev_run):
     """
     Train the model using either a specific experiment or a legacy config file.
     """
     trainer = DialogueTrainer()
     final_overrides = list(overrides)
-    
+
+    if max_epochs is not None:
+        final_overrides.append(f"training.max_epochs={max_epochs}")
+    if batch_size is not None:
+        final_overrides.append(f"dataset.batch_size={batch_size}")
+    if learning_rate is not None:
+        final_overrides.append(f"training.optimizer.lr={learning_rate}")
+    if fast_dev_run:
+        final_overrides.append("training.fast_dev_run=true")
+
     # Logic to handle both new and legacy workflows
     if experiment:
         # 1. New, preferred workflow: Use an experiment.

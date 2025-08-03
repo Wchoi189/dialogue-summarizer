@@ -99,3 +99,6 @@ setup_project.py
 debug_test.py
 memory_efficient_test.py
 simple_train_test.py
+libstdc++.so.6.0.34
+environment.bk.yml
+submission*.csv
