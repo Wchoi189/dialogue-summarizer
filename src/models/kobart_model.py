@@ -8,20 +8,22 @@ import torch
 from icecream import ic
 from omegaconf import DictConfig
 from transformers import AutoTokenizer, BartForConditionalGeneration
-from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from .base_model import BaseSummarizationModel
 import wandb
 logger = logging.getLogger(__name__)
 
+
 if TYPE_CHECKING:
     from wandb.sdk.wandb_run import Run as WandbRun
-
+    from pytorch_lightning.loggers import Logger
 class KoBARTSummarizationModel(BaseSummarizationModel):
     """KoBART-specific implementation of the BaseSummarizationModel."""
     
     # ADD THIS TYPE HINT
-    model: BartForConditionalGeneration
-
+    # model: BartForConditionalGeneration
+    # We remove the type hint on this line and let the base class type declaration take precedence.
+    
     def __init__(self, cfg: DictConfig):
         """Initializes the tokenizer, model, and resizes embeddings."""
         super().__init__(cfg)
@@ -128,7 +130,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
             # Find WandB logger with proper typing
             wandb_logger: Optional[WandbLogger] = None
             
-            if hasattr(self.trainer, 'loggers'):
+            if self.trainer and hasattr(self.trainer, 'loggers'):
                 for logger in self.trainer.loggers:
                     if isinstance(logger, WandbLogger):
                         wandb_logger = logger
@@ -146,11 +148,16 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
                 ic("WandB experiment not initialized")
                 return
             
+            # Add an assertion to satisfy the type checker that the tokenizer is not None
+            assert self.tokenizer is not None, "Tokenizer is None in _log_validation_samples"
             ic(f"Found WandB logger: {type(wandb_logger)}")
             
             # Get predictions for the batch
             input_ids = batch["input_ids"][:num_samples]
             attention_mask = batch["attention_mask"][:num_samples]
+            
+            # Add an assertion to satisfy the type checker that the model is not None
+            assert self.model is not None, "Model is None in _log_validation_samples"            
             
             # Generate predictions
             with torch.no_grad():
@@ -197,6 +204,8 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
                 columns=["Input", "Ground Truth", "Prediction", "ROUGE-1", "ROUGE-2", "ROUGE-L"],
                 data=samples_data
             )
+            # ✅ FIX: Log the table using the global `wandb.log` function
+            wandb.log({"validation_samples": table})
             
             # Log the table
             wandb_logger.experiment.log({"validation_samples": table})
@@ -233,17 +242,17 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         """Called at the end of validation epoch."""
         ic(f"Validation epoch {self.current_epoch} ending")
         
-        # Debug logger information
+        # Add explicit type checks before accessing attributes
         if hasattr(self, 'logger') and self.logger:
             if isinstance(self.logger, list):
                 ic(f"Multiple loggers found: {len(self.logger)}")
                 for i, logger in enumerate(self.logger):
                     ic(f"Logger {i}: {type(logger)}")
-                    if hasattr(logger, 'experiment'):
+                    if isinstance(logger, WandbLogger) and hasattr(logger, 'experiment'):
                         ic(f"Logger {i} experiment type: {type(logger.experiment)}")
             else:
                 ic(f"Single logger type: {type(self.logger)}")
-                if hasattr(self.logger, 'experiment'): 
+                if isinstance(self.logger, WandbLogger) and hasattr(self.logger, 'experiment'): 
                     ic(f"Logger experiment type: {type(self.logger.experiment)}")
-      
+        
         super().on_validation_epoch_end()

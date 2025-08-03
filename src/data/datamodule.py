@@ -81,7 +81,10 @@ class DialogueDataModule(pl.LightningDataModule):
         
         is_inference = (split == "test")
         dataset_cfg = self.cfg.dataset
-        
+
+        # Add a check to ensure the preprocessor and tokenizer are initialized
+        if self.preprocessor is None or self.preprocessor.tokenizer is None:
+            raise ValueError("Preprocessor or its tokenizer is not initialized.")        
         collate_fn = create_collate_fn(
             tokenizer=self.preprocessor.tokenizer,
             is_inference=is_inference

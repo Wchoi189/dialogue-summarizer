@@ -24,26 +24,40 @@ class DialoguePreprocessor:
         self.cfg = cfg
         # We get the specific preprocessing block from the full cfg
         self.preprocessing_cfg = cfg.preprocessing 
+        # self.cfg = cfg.preprocessing
         self.tokenizer = tokenizer
-        self.token_swap_cfg = self.preprocessing_cfg.get("token_swapping", {"enable": False})
         
+        # Handle token swapping config
+        self.token_swapping_cfg = cfg.preprocessing.get("token_swapping", {"enable": False})
+        if self.token_swapping_cfg.get("enable"):
+            ic("Token swapping enabled for preprocessing.")
+            self.token_map = self.token_swapping_cfg.get("token_map", {})
+
         self._setup_special_tokens()
         
         ic(f"DialoguePreprocessor initialized with {len(self.tokenizer)} tokens")
 
-    
+    def _swap_tokens(self, text: str) -> str:
+        """Applies the token map to a given text."""
+        if not self.token_swapping_cfg.get("enable"):
+            return text
+        
+        for original, replacement in self.token_map.items():
+            text = text.replace(original, replacement)
+        return text
+       
     def _setup_special_tokens(self) -> None:
         """Adds special tokens only if token swapping is disabled."""
         # ✅ If we are swapping tokens for names, we don't need to add them to the vocab
-        if not self.token_swap_cfg.get("enable"):
-            additional_tokens = self.cfg.get("special_tokens", [])
+        if not self.token_swapping_cfg.get("enable"):
+            additional_tokens = self.preprocessing_cfg.get("special_tokens", [])
             if additional_tokens:
                 self.tokenizer.add_tokens([str(t) for t in additional_tokens])
 
     def _swap_special_tokens(self, text: str) -> str:
         """Replaces #Person# tokens with mapped names from the config."""
-        if self.token_swap_cfg.get("enable"):
-            token_map = self.token_swap_cfg.get("token_map", {})
+        if self.token_swapping_cfg.get("enable"):
+            token_map = self.token_swapping_cfg.get("token_map", {})
             for original, replacement in token_map.items():
                 text = text.replace(original, replacement)
         return text
@@ -55,7 +69,7 @@ class DialoguePreprocessor:
             return ""
         text = text.replace('\\n', ' ')
         text = re.sub(r'<[^>]+>', ' ', text)
-        if self.cfg.get("normalize_whitespace", True):
+        if self.preprocessing_cfg.get("normalize_whitespace", True):
             text = re.sub(r'\s+', ' ', text)
         return text.strip()
     
@@ -82,7 +96,7 @@ class DialoguePreprocessor:
         
         model_inputs = self.tokenizer(
             dialogue,
-            max_length=self.cfg.max_input_length,
+            max_length=self.preprocessing_cfg.max_input_length,
             truncation=True,
             padding=False,  # Padding is handled by the collate function
             return_tensors="pt" if not is_inference else None
@@ -92,7 +106,7 @@ class DialoguePreprocessor:
             summary = self.preprocess_summary(summary)
             labels = self.tokenizer(
                 summary,
-                max_length=self.cfg.max_target_length,
+                max_length=self.preprocessing_cfg.max_target_length,
                 truncation=True,
                 padding=False,
                 return_tensors="pt" if not is_inference else None
@@ -114,7 +128,7 @@ class DialoguePreprocessor:
         
         model_inputs = self.tokenizer(
             text=processed_dialogues,
-            max_length=self.cfg.max_input_length,
+            max_length=self.preprocessing_cfg.max_input_length,
             truncation=True,
             padding=True, # Batch tokenization can handle padding directly
             return_tensors="pt"
@@ -124,7 +138,7 @@ class DialoguePreprocessor:
             processed_summaries = [self.preprocess_summary(s) for s in summaries]
             labels = self.tokenizer(
                 text=processed_summaries,
-                max_length=self.cfg.max_target_length,
+                max_length=self.preprocessing_cfg.max_target_length,
                 truncation=True,
                 padding=True,
                 return_tensors="pt"

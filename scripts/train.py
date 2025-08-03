@@ -51,21 +51,30 @@ def setup_pytorch_optimizations(cfg):
     # 1. Setup Dynamo settings
     if "dynamo" in pytorch_cfg:
         dynamo_cfg = pytorch_cfg.dynamo
-        
+
+        # Get the dynamo config object dynamically to avoid Pylance warnings
+        dynamo_config = getattr(torch._dynamo, 'config', None)
+        if dynamo_config is None:
+            ic("Could not access torch._dynamo.config. Skipping Dynamo settings.")
+            return
+
         # Cache size limit
         if "cache_size_limit" in dynamo_cfg:
             cache_limit = dynamo_cfg.cache_size_limit
-            torch._dynamo.config.cache_size_limit = cache_limit
+            # ✅ FIX: Use the dynamically retrieved config object
+            dynamo_config.cache_size_limit = cache_limit
             ic(f"✓ Set dynamo cache_size_limit: {cache_limit}")
-        
+
         # Error suppression
         if dynamo_cfg.get("suppress_errors", False):
-            torch._dynamo.config.suppress_errors = True
+            # ✅ FIX: Use the dynamically retrieved config object
+            dynamo_config.suppress_errors = True
             ic("✓ Enabled dynamo error suppression")
-        
+
         # Verbose mode
         if dynamo_cfg.get("verbose", False):
-            torch._dynamo.config.verbose = True
+            # ✅ FIX: Use the dynamically retrieved config object
+            dynamo_config.verbose = True
             ic("✓ Enabled dynamo verbose mode")
     
     # 2. Setup compilation settings (stored for later use in model)
