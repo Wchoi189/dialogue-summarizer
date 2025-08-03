@@ -239,14 +239,23 @@ def cli():
 @click.argument('output_file', type=click.Path())
 @click.option('--config-name', default='config', help='Configuration name')
 @click.option('--config-path', type=click.Path(), help='Custom config directory')
-@click.option('--batch-size', type=int, help='Override batch size')
-def predict(checkpoint_path, test_file, output_file, config_name, config_path, batch_size):
+@click.option('--batch-size', type=int, help='Override evaluation batch size')
+@click.option(
+    '--override', 
+    'overrides', 
+    multiple=True, 
+    help='Custom Hydra overrides (e.g., "generation.max_length=80")'
+)
+def predict(checkpoint_path, test_file, output_file, config_name, config_path, batch_size, overrides):
     """Generate predictions for test data."""
     runner = InferenceRunner()
     
-    overrides = []
+    # Convert the 'overrides' tuple to a list so we can modify it
+    final_overrides = list(overrides)
+    
+    # The existing --batch-size flag is a convenient shortcut
     if batch_size:
-        overrides.append(f"dataset.eval_batch_size={batch_size}")
+        final_overrides.append(f"dataset.eval_batch_size={batch_size}")
     
     output_path = runner.predict(
         checkpoint_path=checkpoint_path,
@@ -254,8 +263,7 @@ def predict(checkpoint_path, test_file, output_file, config_name, config_path, b
         output_file=output_file,
         config_name=config_name,
         config_path=config_path,
-        batch_size=batch_size,
-        overrides=overrides
+        overrides=final_overrides
     )
     
     click.echo(f"Predictions saved to: {output_path}")

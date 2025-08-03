@@ -111,7 +111,7 @@ python scripts/train.py train \
 python scripts/train.py train \
     --experiment baseline \
     --resume-from outputs/models/last.ckpt \
-    --learning-rate 3e-6 \
+    --override training.optimizer.lr=3e-6 \
     --override training.early_stopping.patience=1
 
 # =============================================================================
@@ -177,20 +177,90 @@ python scripts/train.py train \
     --override training.optimizer.weight_decay=0.02 \
     --override text_processing.max_input_length=256
 
+You're right to check the USAGE_GUIDE.md; our recent fixes have made some of its examples outdated. The guide still shows direct flags like --learning-rate, which no longer exist.
+
+I've drafted the necessary updates to align the guide with the current script's functionality. The main change is removing the old, non-functional flags and updating the examples to use either the new high-level flags (--max-epochs, --batch-size) or the --override syntax.
+
+Suggested Updates for USAGE_GUIDE.md
+Here are the snippets to replace the outdated sections in your USAGE_GUIDE.md file.
+
+Update Section 2: Overriding Specific Parameters
+This section needs the biggest change. The old examples with --learning-rate are incorrect. The new version shows the correct way to use the new flags we added and the --override method for more specific parameters.
+
+Replace the old Section 2 with this:
+
+Markdown
+
+# =============================================================================
+# 2. OVERRIDING SPECIFIC PARAMETERS
+# =============================================================================
+
+# Override max_epochs using the new dedicated flag
+python scripts/train.py train --experiment baseline --max-epochs 12
+
+# Override batch_size using the new dedicated flag
+python scripts/train.py train --experiment baseline --batch-size 32
+
+# Override learning_rate using the --override syntax
+python scripts/train.py train --experiment baseline --override training.optimizer.lr=1e-5
+
+# Combine multiple overrides
+python scripts/train.py train \
+    --experiment baseline \
+    --max-epochs 10 \
+    --batch-size 24 \
+    --override training.optimizer.lr=8e-6
+Update Section 6: Resume Training
+The example for resuming and changing settings should use the correct override syntax.
+
+Replace the relevant part of Section 6 with this:
+
+Markdown
+
+# Resume but change some settings
+python scripts/train.py train \
+    --experiment baseline \
+    --resume-from outputs/models/last.ckpt \
+    --override training.optimizer.lr=3e-6 \
+    --override training.early_stopping.patience=1
+Update Section 8: Comparison Experiments
+This section also uses the old, incorrect --learning-rate flag.
+
+Replace the "Compare different learning rates" example in Section 8 with this:
+
+Markdown
+
+# Compare different learning rates
+python scripts/train.py train \
+    --experiment baseline \
+    --override training.optimizer.lr=3e-6 \
+    --override wandb.name=baseline_lr3e6
+
+python scripts/train.py train \
+    --experiment baseline \
+    --override training.optimizer.lr=1e-5 \
+    --override wandb.name=baseline_lr1e5
+Update Section 10: Migration from Old System
+This section is now even more relevant. It should clearly show that fragmented configs and old flags are deprecated in favor of the new centralized experiment system.
+
+Replace Section 10 with this:
+
+Markdown
+
 # =============================================================================
 # 10. MIGRATION FROM OLD SYSTEM
 # =============================================================================
 
-# OLD WAY (fragmented configs):
-# python scripts/train.py --config-name kobart-base-v2 --override training.generation.max_length=80
+# OLD WAY (individual flags, now removed):
+# python scripts/train.py train --config-name kobart-base-v2 --learning-rate 5e-5
 
-# NEW WAY (centralized):
+# NEW WAY (centralized experiment with overrides):
 python scripts/train.py train \
     --experiment baseline \
-    --override generation.max_length=80
+    --override training.optimizer.lr=5e-5
 
-# OLD WAY (unclear which config):
+# OLD WAY (unclear which config is being run):
 # python scripts/train.py --config-name training/aggressive
 
-# NEW WAY (clear experiment):
+# NEW WAY (clear experiment definition):
 python scripts/train.py train --experiment aggressive

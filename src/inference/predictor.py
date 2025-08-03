@@ -65,7 +65,12 @@ class DialoguePredictor:
     
     def _setup_generation_config(self) -> Dict[str, Any]:
         """Setup generation configuration from inference config."""
-        gen_cfg = self.inference_cfg.generation
+        
+        # BEFORE (modular config, phase specific)
+        # gen_cfg = self.inference_cfg.generation
+        
+        # AFTER (centralized config + experiment overrides)
+        gen_cfg = self.cfg.generation
         
         config = {
             "max_length": gen_cfg.get("max_length", 100),
@@ -365,10 +370,18 @@ class DialoguePredictor:
         # Create DataLoader
         dataloader = DataLoader(
             dataset=dataset,
-            batch_size=self.inference_cfg.batch_size,
+            
+            # BEFORE (modular config, phase specific)
+            # batch_size=self.inference_cfg.batch_size,
+            # shuffle=False,
+            # num_workers=self.inference_cfg.get("num_workers", 4),
+            # pin_memory=self.inference_cfg.get("pin_memory", True),
+            
+            #  Point to the centralized dataset settings
+            batch_size=self.cfg.dataset.eval_batch_size,
             shuffle=False,
-            num_workers=self.inference_cfg.get("num_workers", 4),
-            pin_memory=self.inference_cfg.get("pin_memory", True),
+            num_workers=self.cfg.dataset.num_workers,
+            pin_memory=self.cfg.dataset.pin_memory,
             collate_fn=collate_fn
         )
         
