@@ -39,7 +39,7 @@ class DialogueEvaluationRunner:
     def evaluate(
         self,
         checkpoint_path: str,
-        config_name: str = "config",
+        config_name: str,
         config_path: Optional[str] = None,
         split: str = "val",
         output_dir: Optional[Union[str, Path]] = None,

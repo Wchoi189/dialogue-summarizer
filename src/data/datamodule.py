@@ -22,7 +22,7 @@ from .preprocessing import DialoguePreprocessor, create_preprocessor
 logger = logging.getLogger(__name__)
 
 
-class DialogueDataModule(pl.LightningDataModule):
+class DialogueDataModule(pl.LightningDataModule): 
     """Lightning DataModule for dialogue summarization."""
     
     def __init__(self, cfg: DictConfig):
@@ -31,7 +31,8 @@ class DialogueDataModule(pl.LightningDataModule):
         self.cfg = cfg
         self.file_manager = FileManager()
         
-        self.preprocessor: Optional[DialoguePreprocessor] = None
+        self.preprocessor: Optional[DialoguePreprocessor] = None 
+        # Source of problems. Initializes DialoguePreprocessor  with the main config (self.cfg)
         self.datasets = {}
         
         self.train_data: Optional[pd.DataFrame] = None

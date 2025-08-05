@@ -19,10 +19,11 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     ```
 2.  **Install Dependencies**
     ```bash
-    # Install PyTorch with CUDA support
+    # Install PyTorch with CUDA support (nightly, specific version)
     pip3 install --pre torch==2.6.0.dev20241112+cu121 torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu121 --no-cache-dir
-    # Install remaining packages
-    pip install -r requirements.txt
+
+    # All other dependencies are installed via environment.yml automatically.
+    # If you need extras, add them to environment.yml under pip: section.
     ```
 
 3.  **Train Model**

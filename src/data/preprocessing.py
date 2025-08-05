@@ -11,7 +11,8 @@ from typing import Dict, List, Optional
 import pandas as pd
 from icecream import ic
 from omegaconf import DictConfig
-from transformers import AutoTokenizer, PreTrainedTokenizerFast
+from transformers.models.auto.tokenization_auto import AutoTokenizer
+from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 from transformers.tokenization_utils_base import BatchEncoding
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,7 @@ class DialoguePreprocessor:
         is_inference: bool = False
     ) -> BatchEncoding:
         """Preprocesses and tokenizes a single dialogue-summary pair."""
+        #  The prepare_inputs function in preprocessing.py expects a configuration object where it can directly access max_input_length and max_target_length at the top level of its configuration attribute, like self.preprocessing_cfg.max_input_length
         dialogue = self.preprocess_dialogue(dialogue)
         
         # ✅ FIX: Call the local _swap_tokens method before tokenization
@@ -104,7 +106,7 @@ class DialoguePreprocessor:
         
         model_inputs = self.tokenizer(
             dialogue,
-            max_length=self.preprocessing_cfg.max_input_length,
+            max_length=self.preprocessing_cfg.max_input_length, # ERROR
             truncation=True,
             padding=False,  # Padding is handled by the collate function
             return_tensors="pt" if not is_inference else None

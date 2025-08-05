@@ -33,7 +33,7 @@ class DialogueDataset(Dataset):
         Initialize dataset.
         """
         self.data = data.copy()
-        self.preprocessor = preprocessor
+        self.preprocessor = preprocessor # preprocessor.prepare_inputs passes the configuration that the preprocessor was initialized with
         self.cfg = cfg
         self.split = split
         self.is_inference = is_inference
