@@ -11,7 +11,8 @@ def test_model_generation():
     
     # Load the original pretrained model
     tokenizer = AutoTokenizer.from_pretrained('digit82/kobart-summarization')
-    model = BartForConditionalGeneration.from_pretrained('digit82/kobart-summarization')
+    model_tuple = BartForConditionalGeneration.from_pretrained('digit82/kobart-summarization', output_loading_info=False)
+    model = model_tuple[0] if isinstance(model_tuple, tuple) else model_tuple
     
     # Add special tokens
     special_tokens = ['#Person1#', '#Person2#', '#Person3#', '#PhoneNumber#', '#Address#', '#PassportNumber#']

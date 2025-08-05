@@ -84,8 +84,8 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     python scripts/inference.py submission /path/to/best/model.ckpt
 
     python scripts/inference.py submission \
-    '/home/wb2x/workspace/dialogue-summarizer/outputs/models/best-epoch=06-val/rouge_f=0.4226.ckpt' \
-    --output-file submission1.csv
+    'outputs/models/best-epoch=00-val_rouge_f=val/rouge_f=0.5597.ckpt' \
+    --output-file submission13.csv
     ```
 **Wandb login**
 ```bash

@@ -33,9 +33,13 @@ class DialoguePreprocessor:
             ic("Token swapping enabled for preprocessing.")
             self.token_map = self.token_swapping_cfg.get("token_map", {})
 
-        self._setup_special_tokens()
+        # ✅ FIX: Change the access path to the preprocessing_cfg object
+        additional_special_tokens = self.preprocessing_cfg.get("additional_special_tokens", [])
+        if additional_special_tokens:
+            self.tokenizer.add_tokens(additional_special_tokens) 
         
         ic(f"DialoguePreprocessor initialized with {len(self.tokenizer)} tokens")
+
 
     def _swap_tokens(self, text: str) -> str:
         """Applies the token map to a given text."""
@@ -90,13 +94,17 @@ class DialoguePreprocessor:
         dialogue: str,
         summary: Optional[str] = None,
         is_inference: bool = False
-    ) -> BatchEncoding:
+    ) -> Dict: # ✅ FIX: Change type hint to a more general Dict
         """Preprocesses and tokenizes a single dialogue-summary pair."""
         dialogue = self.preprocess_dialogue(dialogue)
         
+        # ✅ FIX: Call the local _swap_tokens method before tokenization
+        if self.token_swapping_cfg.get("enable"):
+            dialogue = self._swap_tokens(dialogue)
+        
         model_inputs = self.tokenizer(
             dialogue,
-            max_length=self.cfg.preprocessing.max_input_length,
+            max_length=self.preprocessing_cfg.max_input_length,
             truncation=True,
             padding=False,  # Padding is handled by the collate function
             return_tensors="pt" if not is_inference else None
@@ -114,7 +122,7 @@ class DialoguePreprocessor:
             model_inputs['labels'] = labels['input_ids']
 
         return model_inputs
-
+    
     def batch_preprocess(
         self,
         dialogues: List[str],

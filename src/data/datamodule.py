@@ -6,7 +6,7 @@ Handles data loading, preprocessing, and batch creation.
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import pandas as pd
 import pytorch_lightning as pl
@@ -14,6 +14,7 @@ from icecream import ic
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
+from utils.config_utils import ConfigManager
 from utils.file_utils import FileManager
 from .dataset import create_collate_fn, create_datasets
 from .preprocessing import DialoguePreprocessor, create_preprocessor
@@ -38,12 +39,42 @@ class DialogueDataModule(pl.LightningDataModule):
         self.test_data: Optional[pd.DataFrame] = None
         
         ic("DialogueDataModule initialized")
-    
+
+    def _load_datasets(self) -> Tuple[pd.DataFrame, pd.DataFrame, Optional[pd.DataFrame]]:
+        """
+        Loads the datasets (train, dev, test) from the configured paths.
+        
+        Returns:
+            A tuple containing the train, dev, and optionally, test DataFrames.
+        """
+        cfg = self.cfg.dataset
+        data_path = Path(cfg.data_path)
+
+        train_data = self.file_manager.load_csv(data_path / cfg.files.train)
+        dev_data = self.file_manager.load_csv(data_path / cfg.files.dev)
+
+        test_data = None
+        if "test" in cfg.files:
+            test_file_path = data_path / cfg.files.test
+            if test_file_path.exists():
+                test_data = self.file_manager.load_csv(test_file_path)
+
+        return train_data, dev_data, test_data    
     def prepare_data(self) -> None:
-        """Validates that data files exist (called only on the main process)."""
+        """Downloads data and tokenizes if necessary."""
         ic("Preparing data...")
-        # This is a good place for download logic or high-level validation
-        # For now, we assume data exists.
+        self.file_manager = FileManager()
+        
+        # ✅ FIX: Remove the block below. The `self.cfg` object should already be
+        # correctly configured when the data module is initialized.
+        
+        # # FIX: Load the configuration with the experiment overrides
+        # self.cfg = ConfigManager().load_config(
+        #     config_name="config-baseline-centralized",
+        #     overrides=[f"experiment={self.cfg.experiment_name}"]
+        # )
+
+        self.train_data, self.val_data, self.test_data = self._load_datasets()
         ic("Data preparation complete")
     
     def setup(self, stage: Optional[str] = None) -> None:

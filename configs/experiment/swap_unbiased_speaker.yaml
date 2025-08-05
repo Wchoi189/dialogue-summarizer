@@ -11,7 +11,6 @@ wandb:
 # =============================================================================
 experiment_name: "swap_unbiased_speaker"
 
-
 preprocessing:
   token_swapping:
     enable: true
@@ -23,6 +22,8 @@ preprocessing:
       "#Person5#": "화자5"
       "#Person6#": "화자6"
       "#Person7#": "화자7"
+  special_tokens:
+    additional_special_tokens: ["화자1", "화자2", "화자3", "화자4", "화자5", "화자6", "화자7"]
 
 # ✅ NEW: Add a postprocessing block to enable the swap
 postprocessing:
@@ -36,3 +37,5 @@ postprocessing:
       "#Person5#": "화자5"
       "#Person6#": "화자6"
       "#Person7#": "화자7"
+  special_tokens:
+    additional_special_tokens: ["화자1", "화자2", "화자3", "화자4", "화자5", "화자6", "화자7"]
