@@ -65,14 +65,6 @@ class DialogueDataModule(pl.LightningDataModule):
         ic("Preparing data...")
         self.file_manager = FileManager()
         
-        # ✅ FIX: Remove the block below. The `self.cfg` object should already be
-        # correctly configured when the data module is initialized.
-        
-        # # FIX: Load the configuration with the experiment overrides
-        # self.cfg = ConfigManager().load_config(
-        #     config_name="config-baseline-centralized",
-        #     overrides=[f"experiment={self.cfg.experiment_name}"]
-        # )
 
         self.train_data, self.val_data, self.test_data = self._load_datasets()
         ic("Data preparation complete")

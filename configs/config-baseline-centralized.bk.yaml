@@ -1,4 +1,3 @@
-# FILE: configs/config-baseline-centralized.yaml
 # @package _global_
 # CENTRALIZED CONFIGURATION
 # Single source of truth for all settings
@@ -6,13 +5,24 @@
 # If overrides are needed, define experiment in defaults below
 defaults:
   - _self_
-  - dataset: dialogue_data
-  - model: kobart
-  - preprocessing: standard
-  - postprocessing: default
-  - pytorch: default
-  - inference: generation
-  - experiment: null
+  - dataset: dialogue_data      # Loads the dataset settings from configs/dataset/dialogue_data.yaml
+  - model: kobart             # Loads the model settings from configs/model/kobart.yaml
+  - preprocessing: standard   # Loads preprocessing settings from configs/preprocessing/standard.yaml
+  - postprocessing: default   # Loads post-processing settings from configs/postprocessing/default.yaml
+  - pytorch: default          # Loads PyTorch settings from configs/pytorch/default.yaml
+  - inference: generation     # Loads inference settings from configs/inference/generation.yaml
+  - experiment: null          # This is the placeholder for command-line experiment overrides
+  # - _self_
+  # - dataset: dialogue_data
+  # - model: kobart
+  # - preprocessing: standard
+  # - postprocessing: default
+  # - pytorch: default
+  # - inference: generation
+  # - experiment: swap_unbiased_speaker  # ✅ FIX: Add a placeholder entry for the experiment
+  # - model: kobart
+  # - pytorch: default
+  # - inference: generation
 
 # =============================================================================
 # EXPERIMENT METADATA
@@ -52,9 +62,8 @@ dataset:
     input: "dialogue"
     target: "summary"
     topic: "topic"
-
   # Batch settings
-  batch_size: 16
+  batch_size: 16 # ⚠️ FIX: Update to recommended batch size
   eval_batch_size: 32
   num_workers: 8
   pin_memory: true
@@ -62,35 +71,97 @@ dataset:
   shuffle_val: false
   drop_last: false
 
+  # preprocessing:
+  #   max_input_length: 512
+  #   max_target_length: 120
+  
+
 # =============================================================================
-# MODEL CONFIGURATION
+# MODEL CONFIGURATION  
 # =============================================================================
 model:
   # Model selection
   name: "kobart"
   architecture: "bart"
   model_name_or_path: "digit82/kobart-summarization"
-
+  
   tokenizer:
     # Tokenizer (same as model)
     name_or_path: "digit82/kobart-summarization"
     use_fast: true
 
+  
   # Model compilation
   compile:
     enabled: true
     mode: "default"
-    dynamic: true
+    dynamic: true  # Crucial for handling variable sequence lengths in NLP tasks
 
+  
 # =============================================================================
 # PREPROCESSING CONFIGURATION
 # =============================================================================
-# Removed the redundant block here. This is now handled by the `defaults` list
+
+preprocessing:
+  strategy: "std"
+  max_input_length: 512
+  max_target_length: 60
+  truncation: true
+  padding: false
+  normalize_whitespace: true
+  remove_extra_newlines: true
+  special_tokens:
+    - "#Person1#"
+    - "#Person2#"
+    - "#Person3#"
+    - "#Person4#"
+    - "#Person5#"
+    - "#Person6#"
+    - "#Person7#"
+    - "#PhoneNumber#"
+    - "#Address#"
+    - "#PassportNumber#"
+  token_swapping:
+    enable: true
+    token_map:
+      "#Person1#": "민준"
+      "#Person2#": "서연"
+      "#Person3#": "지훈"
+      "#Person4#": "수진"
+      "#Person5#": "현우"
+      "#Person6#": "은영"
+      "#Person7#": "동현"
+
 
 # =============================================================================
 # POSTPROCESSING CONFIGURATION
 # =============================================================================
-# Removed the redundant block here. This is now handled by the `defaults` list
+
+postprocessing:
+  skip_special_tokens: false
+  remove_tokens:
+    - "<usr>"
+    - "<s>"
+    - "</s>"
+    - "<pad>"
+    - "<unk>"
+  text_cleaning:
+    strip_whitespace: true
+    normalize_whitespace: true
+    remove_empty_lines: true
+  korean_specific:
+    remove_special_markers: false
+    normalize_punctuation: true
+  token_swapping:
+    enable: true
+    token_map:
+      "#Person1#": "민준"
+      "#Person2#": "서연"
+      "#Person3#": "지훈"
+      "#Person4#": "수진"
+      "#Person5#": "현우"
+      "#Person6#": "은영"
+      "#Person7#": "동현"
 
 # =============================================================================
 # TRAINING CONFIGURATION
@@ -99,7 +170,7 @@ training:
   accelerator: "auto"
   devices: 1
   precision: "16-mixed"
-  max_steps: -1
+  max_steps: -1  
   max_epochs: 12
   accumulate_grad_batches: 4
   overfit_batches: 0.0
@@ -113,21 +184,21 @@ training:
     weight_decay: 0.05
     betas: [0.9, 0.999]
     eps: 1e-8
-
+  
   # Scheduler
   lr_scheduler:
     name: "cosine"
     warmup_ratio: 0.1
-
+  
   # Validation
   val_check_interval: 1.0
   check_val_every_n_epoch: 1
-
+  
   # Model saving
   monitor: "val/rouge_f"
   mode: "max"
   save_top_k: 1
-
+  
   # Early stopping
   early_stopping:
     enabled: true
@@ -136,34 +207,41 @@ training:
     patience: 5
     min_delta: 0.01
     verbose: true
-
+  
   # Gradient clipping
   gradient_clip_val: 1.0
   gradient_clip_algorithm: "norm"
-
+  
   # For debug overrides
   fast_dev_run: false
-
 # =============================================================================
-# INFERENCE CONFIGURATION
+# INFERENCE CONFIGURATION (for non-generation settings)
 # =============================================================================
 inference:
+  # This block now only contains settings specific to the inference RUN,
+
   checkpoint_path: null
 
+  # ❌ The 'generation' block has been moved from here.
+
 # =============================================================================
-# GENERATION CONFIGURATION
+# GENERATION CONFIGURATION (NOW TOP-LEVEL)
 # =============================================================================
 generation:
+  # Base generation settings here
   max_length: 40
   min_length: 5
   num_beams: 5
   repetition_penalty: 1.7
   length_penalty: 0.5
   early_stopping: true
+
+  # Sampling (disabled)
   do_sample: false
   temperature: 1.0
   top_k: 50
   top_p: 1.0
+  
 
 # =============================================================================
 # OUTPUT DIRECTORIES
@@ -171,7 +249,7 @@ generation:
 output_dir: "outputs"
 paths:
   log_dir: "${output_dir}/logs"
-  model_dir: "${output_dir}/models"
+  model_dir: "${output_dir}/models" 
   prediction_dir: "${output_dir}/predictions"
 
 # =============================================================================

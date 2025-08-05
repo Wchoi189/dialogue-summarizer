@@ -36,7 +36,7 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
 
 
     python scripts/train.py train --config-name config-baseline-centralized --experiment swap_regular_names --max-epochs 1
-    python scripts/train.py train --config-name config-baseline-centralized --experiment swap_unbiased_speaker --max-epochs 5
+    python scripts/train.py train --config-name config-baseline-centralized --experiment swap_unbiased_speaker --max-epochs 1
 
     ```
 

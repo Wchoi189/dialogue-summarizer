@@ -1,0 +1,10 @@
+# FILE: configs/config-base.yaml
+# @package _global_
+defaults:
+  - _self_
+  - dataset: dialogue_data
+  - model: kobart
+  - preprocessing: standard
+  - postprocessing: default
+  - pytorch: default
+  - inference: generation

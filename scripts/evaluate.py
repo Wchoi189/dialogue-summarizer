@@ -346,17 +346,16 @@ class DialogueEvaluationRunner:
             
             # Create evaluator and calculate metrics
             evaluator = DialogueEvaluator()
-            detailed_metrics = evaluator.evaluate_with_analysis(
+            detailed_metrics = evaluator.evaluate_predictions(
                 predictions=all_predictions,
-                references=val_data["summary"].tolist(),
-                sample_ids=all_sample_ids
+                references=val_data["summary"].tolist()
             )
             
             # Save detailed analysis
             analysis_file = output_dir / f"{split}_analysis.json"
             self.file_manager.save_json(detailed_metrics, analysis_file)
             
-            return detailed_metrics["overall_metrics"]
+            return detailed_metrics
         
         return {"num_predictions": len(all_predictions)}
     

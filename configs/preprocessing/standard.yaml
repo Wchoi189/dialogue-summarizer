@@ -1,12 +1,22 @@
 # FILE: configs/preprocessing/standard.yaml
-# @package _global_
+# @package preprocessing
 # Standard preprocessing configuration for dialogue summarization
 preprocessing:
   # Processing strategy name
   strategy: "std"
+
+  # ✅ FIX: Add max_length values to the standard preprocessing config
+  max_input_length: 512
+  max_target_length: 120
+
+  # Tokenization and cleaning settings
+  truncation: true
+  padding: false
+  normalize_whitespace: true
+  remove_extra_newlines: true
+  
+  # Special tokens to be added to the tokenizer
   special_tokens:
-    # ✅ FIX: Add a new key for additional tokens to handle the #PersonN# tokens correctly.
-    # This will ensure they are treated as a single token during tokenization.
     additional_special_tokens:
       - "#Person1#"
       - "#Person2#"

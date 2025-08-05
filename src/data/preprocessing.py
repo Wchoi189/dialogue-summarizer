@@ -94,7 +94,7 @@ class DialoguePreprocessor:
         dialogue: str,
         summary: Optional[str] = None,
         is_inference: bool = False
-    ) -> Dict: # ✅ FIX: Change type hint to a more general Dict
+    ) -> BatchEncoding:
         """Preprocesses and tokenizes a single dialogue-summary pair."""
         dialogue = self.preprocess_dialogue(dialogue)
         

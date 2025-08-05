@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from models.kobart_model import KoBARTSummarizationModel
 from utils.config_utils import ConfigManager
-from evaluation.metrics import RougeCalculator
+from utils.metrics import compute_rouge_scores
 
 def debug_generation(
     checkpoint_path: str,
@@ -77,8 +77,7 @@ def debug_generation(
 
     # 5. Evaluate
     if ground_truth:
-        rouge_calc = RougeCalculator()
-        scores = rouge_calc.calculate_rouge([prediction], [ground_truth])
+        scores = compute_rouge_scores([prediction], [ground_truth])
         ic(scores)
 
 

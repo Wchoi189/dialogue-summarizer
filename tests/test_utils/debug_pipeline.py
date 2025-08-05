@@ -6,7 +6,7 @@ Save as scripts/debug_pipeline.py
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from utils.config_utils import ConfigManager
 from data.preprocessing import create_preprocessor
@@ -18,7 +18,7 @@ def main():
     
     # Load config
     config_manager = ConfigManager()
-    cfg = config_manager.load_config("config")
+    cfg = config_manager.load_config("config-baseline-centralized.bk")
     
     # Create model and preprocessor
     model = KoBARTSummarizationModel(cfg)

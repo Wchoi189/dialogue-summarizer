@@ -110,12 +110,18 @@ def log_config_summary(cfg: DictConfig, logger: Optional[logging.Logger] = None)
     table.add_column("Key", style="magenta")
     table.add_column("Value", style="green")
     
-    def add_config_rows(config_dict: Dict[str, Any], section: str = ""):
-        for key, value in config_dict.items():
-            if isinstance(value, dict):
-                add_config_rows(value, f"{section}.{key}" if section else key)
-            else:
-                table.add_row(section, key, str(value))
+    def add_config_rows(config_dict: Any, section: str = ""):
+        if isinstance(config_dict, dict):
+            for key, value in config_dict.items():
+                if isinstance(value, dict) or isinstance(value, list):
+                    add_config_rows(value, f"{section}.{key}" if section else key)
+                else:
+                    table.add_row(section, key, str(value))
+        elif isinstance(config_dict, list):
+            for idx, item in enumerate(config_dict):
+                add_config_rows(item, f"{section}[{idx}]")
+        else:
+            table.add_row(section, "", str(config_dict))
     
     # Convert config to dict and add rows
     from omegaconf import OmegaConf
@@ -308,16 +314,30 @@ class ExperimentLogger:
         self.logger.info(f"Experiment duration: {duration}")
         ic(f"Experiment completed in: {duration}")
     
+    # def get_config_summary(self, cfg: DictConfig) -> Dict[str, Any]:
+    #     """Get a summary of key configuration parameters."""
+    #     summary = {
+    #         "model_name": cfg.get("model", {}).get("name", "unknown"),
+    #         "dataset_path": cfg.get("dataset", {}).get("data_path", "unknown"),
+            
+    #         # ✅ CHANGE THIS LINE
+    #         "batch_size": cfg.get("dataset", {}).get("batch_size", "unknown"),
+            
+    #         "learning_rate": cfg.get("training", {}).get("optimizer", {}).get("lr", "unknown"),
+    #         "max_epochs": cfg.get("training", {}).get("max_epochs", "unknown"),
+    #     }
+    #     return summary
+    
     def get_config_summary(self, cfg: DictConfig) -> Dict[str, Any]:
         """Get a summary of key configuration parameters."""
         summary = {
             "model_name": cfg.get("model", {}).get("name", "unknown"),
             "dataset_path": cfg.get("dataset", {}).get("data_path", "unknown"),
             
-            # ✅ CHANGE THIS LINE
+            # ✅ FIX: Update the path to correctly find batch_size
             "batch_size": cfg.get("dataset", {}).get("batch_size", "unknown"),
             
             "learning_rate": cfg.get("training", {}).get("optimizer", {}).get("lr", "unknown"),
             "max_epochs": cfg.get("training", {}).get("max_epochs", "unknown"),
         }
-        return summary
+        return summary    

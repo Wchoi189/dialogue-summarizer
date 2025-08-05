@@ -436,7 +436,8 @@ def cli():
 @click.option(
     '--config-name', 
     # default='kobart-base-v2', 
-    default='config-baseline-centralized',
+    # ✅ FIX: Remove the hard-coded default
+    default=None,
     help='Name of the main configuration file to use.'
 )
 @click.option(
@@ -475,23 +476,34 @@ def train(experiment, config_name, resume_from, overrides, max_epochs, batch_siz
     if fast_dev_run:
         final_overrides.append("training.fast_dev_run=true")
 
-    # Logic to handle both new and legacy workflows
-    if experiment:
-        # 1. New, preferred workflow: Use an experiment.
-        config_to_load = 'config-baseline-centralized'
-        final_overrides.append(f"experiment={experiment}")
-        if config_name:
-            ic(f"Warning: --config-name '{config_name}' is ignored when --experiment is used.")
+    # # Logic to handle both new and legacy workflows
+    # if experiment:
+    #     # 1. New, preferred workflow: Use an experiment.
+    #     config_to_load = 'config-baseline-centralized'
+    #     final_overrides.append(f"experiment={experiment}")
+    #     if config_name:
+    #         ic(f"Warning: --config-name '{config_name}' is ignored when --experiment is used.")
     
-    elif config_name:
-        # 2. Legacy workflow: Use a specific config file.
+    # elif config_name:
+    #     # 2. Legacy workflow: Use a specific config file.
+    #     config_to_load = config_name
+    
+    # else:
+    #     # 3. Default behavior: Run the baseline experiment.
+    #     config_to_load = 'config-baseline-centralized'
+    #     final_overrides.append("experiment=baseline")
+    #     ic("No config or experiment specified. Defaulting to the 'baseline' experiment.")
+    # ✅ FIX: Update the logic to handle the new defaults
+    if config_name:
         config_to_load = config_name
-    
+        if experiment:
+            final_overrides.append(f"experiment={experiment}")
+    elif experiment:
+        config_to_load = "config-baseline-centralized" # Fallback to a sensible default
+        final_overrides.append(f"experiment={experiment}")
     else:
-        # 3. Default behavior: Run the baseline experiment.
-        config_to_load = 'config-baseline-centralized'
-        final_overrides.append("experiment=baseline")
-        ic("No config or experiment specified. Defaulting to the 'baseline' experiment.")
+        raise ValueError("Must specify a config or experiment to run.")
+
 
     best_model_path = trainer.train(
         config_name=config_to_load,

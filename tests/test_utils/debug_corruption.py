@@ -2,7 +2,7 @@
 """Debug postprocessing corruption"""
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from utils.config_utils import ConfigManager
 from models.kobart_model import KoBARTSummarizationModel
@@ -13,7 +13,7 @@ def debug_postprocessing_corruption():
     print("🔍 Debugging Postprocessing Corruption...")
     
     config_manager = ConfigManager()
-    cfg = config_manager.load_config("config")
+    cfg = config_manager.load_config("config-baseline-centralized")
     
     model = KoBARTSummarizationModel(cfg)
     
@@ -25,7 +25,7 @@ def debug_postprocessing_corruption():
     # Check if postprocessing config exists
     if "postprocessing" in cfg:
         print(f"Postprocessing config found: {cfg.postprocessing}")
-        processed = model._apply_post_processing(original_target)
+        processed = model._apply_post_processing(original_target,"validation")
         print(f"After postprocessing: '{processed}'")
         
         if "#Person2#" not in processed:
