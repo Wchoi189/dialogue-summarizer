@@ -48,13 +48,13 @@ postprocessing:
     - "</s>"
     - "<pad>"
     - "<unk>"
-    - "민준"
-    - "서연"
-    - "지훈"
-    - "수진"
-    - "현우"
-    - "은영"
-    - "동현"
+    # - "민준"
+    # - "서연"
+    # - "지훈"
+    # - "수진"
+    # - "현우"
+    # - "은영"
+    # - "동현"
   text_cleaning:
     strip_whitespace: true
     normalize_whitespace: true

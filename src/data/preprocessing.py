@@ -174,10 +174,15 @@ class DialoguePreprocessor:
 
 
 def create_preprocessor(cfg: DictConfig) -> DialoguePreprocessor:
-    """Factory function to create a preprocessor with a tokenizer."""
     model_name = cfg.model.tokenizer.name_or_path
     ic(f"Loading tokenizer: {model_name}")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     
-    # Pass the ENTIRE config object, not just a subsection
+    # 📝 NEW: Log the state of token swapping at the start of the pipeline
+    swap_enabled = cfg.preprocessing.get("token_swapping", {}).get("enable", False)
+    if swap_enabled:
+        ic("✅ Preprocessing: Token swapping is ENABLED. Replacing #PersonN# with names.")
+    else:
+        ic("❌ Preprocessing: Token swapping is DISABLED.")
+
     return DialoguePreprocessor(cfg, tokenizer)

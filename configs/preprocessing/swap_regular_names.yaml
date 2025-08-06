@@ -16,7 +16,7 @@ normalize_whitespace: true
 remove_extra_newlines: true
 
 token_swapping:
-  enable: false
+  enable: true
   token_map:
     "#Person1#": "민준"
     "#Person2#": "서연"

@@ -75,28 +75,47 @@ class DialogueDataset(Dataset):
         """
         Get a single sample.
         """
+        # row = self.data.iloc[idx]
+        # dialogue = str(row[self.input_col])
+        # sample = self.data.iloc[idx]
+        # #  CORRECT: This finds "#Person1#" and replaces it with "화자1"
+        # # dialogue = dialogue.replace("#Person1#", "화자1").replace("#Person2#", "화자2").replace("#Person3#", "화자3")
+    
+        # dialogue = self.preprocessor._swap_tokens(str(row[self.input_col]))
+        
+        # summary = None
+        # if self.cfg.columns.target in self.data.columns:
+        #     summary = self.preprocessor._swap_tokens(str(row[self.cfg.columns.target]))     
+
+        # # Preprocess and tokenize
+        # inputs = self.preprocessor.prepare_inputs(
+        #     dialogue=dialogue,
+        #     summary=summary,
+        #     is_inference=self.is_inference
+        # )
         row = self.data.iloc[idx]
-        dialogue = str(row[self.input_col])
-        sample = self.data.iloc[idx]
-        # ✅ CORRECT: This finds "#Person1#" and replaces it with "화자1"
-        # dialogue = dialogue.replace("#Person1#", "화자1").replace("#Person2#", "화자2").replace("#Person3#", "화자3")
-
         
-        # ✅ FIX: Apply token swapping to the dialogue text before tokenization
-        dialogue = self.preprocessor._swap_tokens(str(sample[self.cfg.columns.input]))
-        
-        # Get target if it exists
-        summary = None
-        if self.cfg.columns.target in self.data.columns:
-            summary = self.preprocessor._swap_tokens(str(sample[self.cfg.columns.target]))     
+        dialogue_text = str(row[self.input_col])
+        summary_text = str(row[self.target_col])
 
+        # Apply the swap
+        dialogue_swapped = self.preprocessor._swap_tokens(dialogue_text)
+        summary_swapped = self.preprocessor._swap_tokens(summary_text)
+
+        # 📝 NEW: Log the text only for the first 5 samples
+        if idx < 5:
+            ic(f"Sample {idx}: Original Dialogue: {dialogue_text[:50]}...")
+            ic(f"Sample {idx}: Swapped Dialogue: {dialogue_swapped[:50]}...")
+            ic(f"Sample {idx}: Original Summary: {summary_text[:50]}...")
+            ic(f"Sample {idx}: Swapped Summary: {summary_swapped[:50]}...")
+        
         # Preprocess and tokenize
         inputs = self.preprocessor.prepare_inputs(
-            dialogue=dialogue,
-            summary=summary,
+            dialogue=dialogue_swapped,
+            summary=summary_swapped,
             is_inference=self.is_inference
         )
-        
+
         # Convert to tensors and squeeze batch dimension
         tensor_inputs = {}
         for key, value in inputs.items():
