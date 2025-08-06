@@ -1,0 +1,16 @@
+# FILE: configs/postprocessing/swap_unbiased_speaker.yaml
+# @package postprocessing
+# Post-processing configuration for text generation
+
+token_swapping:
+  enable: true
+  token_map:
+    "#Person1#": "화자1"  # Speaker 1
+    "#Person2#": "화자2"  # Speaker 2
+    "#Person3#": "화자3"
+    "#Person4#": "화자4"
+    "#Person5#": "화자5"
+    "#Person6#": "화자6"
+    "#Person7#": "화자7"
+special_tokens:
+  additional_special_tokens: ["화자1", "화자2", "화자3", "화자4", "화자5", "화자6", "화자7"]

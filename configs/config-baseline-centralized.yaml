@@ -8,8 +8,8 @@ defaults:
   - _self_
   - dataset: dialogue_data
   - model: kobart
-  - preprocessing: swap_regular_names
-  - postprocessing: swap_regular_names
+  - preprocessing: swap_unbiased_speaker
+  - postprocessing: swap_unbiased_speaker
   - pytorch: default
   - inference: generation
   - experiment: null
@@ -109,7 +109,7 @@ training:
   # Optimizer
   optimizer:
     name: "adamw"
-    lr: 5e-5
+    lr: 1e-5
     weight_decay: 0.05
     betas: [0.9, 0.999]
     eps: 1e-8
@@ -133,7 +133,7 @@ training:
     enabled: true
     monitor: "val/rouge_f"
     mode: "max"
-    patience: 5
+    patience: 3
     min_delta: 0.01
     verbose: true
 

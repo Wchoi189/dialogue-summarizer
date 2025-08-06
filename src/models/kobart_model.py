@@ -3,7 +3,7 @@
 KoBART model implementation for Korean dialogue summarization.
 """
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 import torch
 from icecream import ic
 from omegaconf import DictConfig
@@ -18,12 +18,10 @@ if TYPE_CHECKING:
     from wandb.sdk.wandb_run import Run as WandbRun
     from pytorch_lightning.loggers import Logger
 class KoBARTSummarizationModel(BaseSummarizationModel):
-    """KoBART-specific implementation of the BaseSummarizationModel."""
     
-    # ADD THIS TYPE HINT
-    # model: BartForConditionalGeneration
-    # We remove the type hint on this line and let the base class type declaration take precedence.
-    
+    # ✅ FIX: Add a type hint here for Pylance
+    model: BartForConditionalGeneration
+
     def __init__(self, cfg: DictConfig):
         """Initializes the tokenizer, model, and resizes embeddings."""
         super().__init__(cfg)
@@ -37,11 +35,13 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         assert self.tokenizer is not None, "Tokenizer failed to initialize in _setup_tokenizer."
         
         # 3. CRITICAL: Resize model embeddings to match the tokenizer's new vocabulary size
-        original_vocab_size = self.model.config.vocab_size
+        # ✅ FIX: Use a cast here to explicitly tell Pylance the type
+        model_obj = cast(BartForConditionalGeneration, self.model)
+        original_vocab_size = model_obj.config.vocab_size
         current_vocab_size = len(self.tokenizer)
         if current_vocab_size > original_vocab_size:
             ic(f"Resizing token embeddings: {original_vocab_size} -> {current_vocab_size}")
-            self.model.resize_token_embeddings(current_vocab_size)
+            model_obj.resize_token_embeddings(current_vocab_size)
 
         # 4. Setup generation config for validation logging (AFTER tokenizer setup)
         self.generation_config = {
@@ -57,30 +57,6 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
 
         ic(f"KoBARTSummarizationModel initialized with {self.get_parameter_count()} parameters")
 
-    # def _setup_tokenizer(self) -> None:
-    #     """Initializes the tokenizer and adds special tokens from the config."""
-    #     tokenizer_cfg = self.model_cfg.tokenizer
-    #     self.tokenizer = AutoTokenizer.from_pretrained(
-    #         tokenizer_cfg.name_or_path,
-    #         use_fast=tokenizer_cfg.get("use_fast", True)
-    #     )
-    #     # This assertion informs Pylance that the tokenizer is now valid
-    #     assert self.tokenizer is not None, "Tokenizer failed to load from pretrained."
-        
-    #     # BEFORE:
-    #     # special_tokens_list = self.cfg.preprocessing.get("special_tokens", [])
-
-    #     # AFTER (✅ Add this logic to handle old and new checkpoints)
-    #     if hasattr(self.cfg, "preprocessing"):
-    #         # For new checkpoints with the centralized structure
-    #         special_tokens_list = self.cfg.preprocessing.get("special_tokens", [])
-    #     else:
-    #         # Fallback for old checkpoints with the nested structure
-    #         # special_tokens_list = self.cfg.dataset.preprocessing.get("special_tokens", [])
-    #         special_tokens_list = self.cfg.dataset.preprocessing.get("special_tokens", [])
-
-    #     if special_tokens_list:
-    #         self.tokenizer.add_tokens([str(t) for t in special_tokens_list])
     def _setup_tokenizer(self) -> None:
         """Initializes the tokenizer and adds special tokens from the config."""
         tokenizer_cfg = self.model_cfg.tokenizer
@@ -89,31 +65,28 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
             use_fast=tokenizer_cfg.get("use_fast", True)
         )
         assert self.tokenizer is not None, "Tokenizer failed to load from pretrained."
-        
-        # ✅ NEW: Log the tokenizer's initial vocabulary size
         ic(f"Initial tokenizer vocabulary size: {len(self.tokenizer)}")
         
-        # This is where your special tokens are added
-        special_tokens_list = self.cfg.preprocessing.get("special_tokens", [])
+        # ✅ FIX: Use the correct path to the list of additional special tokens
+        additional_special_tokens = self.cfg.preprocessing.get("token_swapping", {}).get("additional_special_tokens", [])
         
-        if special_tokens_list:
+        if additional_special_tokens:
             # ✅ NEW: Check if any of the special tokens are already in the vocabulary
-            pre_existing_tokens = [token for token in special_tokens_list if token in self.tokenizer.get_vocab()]
+            pre_existing_tokens = [token for token in additional_special_tokens if token in self.tokenizer.get_vocab()]
             if pre_existing_tokens:
                 ic(f"Warning: The following special tokens already exist in the tokenizer's vocabulary: {pre_existing_tokens}")
             
-            self.tokenizer.add_tokens([str(t) for t in special_tokens_list])
+            self.tokenizer.add_tokens([str(t) for t in additional_special_tokens])
             
-            # ✅ NEW: Log the final vocabulary size
             ic(f"Final tokenizer vocabulary size: {len(self.tokenizer)}")
-            ic(f"Added special tokens: {special_tokens_list}")
+            ic(f"Added special tokens: {additional_special_tokens}")
 
     def _setup_model(self) -> None:
         """Initializes the BART model."""
         model_obj = BartForConditionalGeneration.from_pretrained(
             self.model_cfg.model_name_or_path
         )
-        
+       
         # This logic correctly handles the two possible return types of from_pretrained
         if isinstance(model_obj, tuple):
             self.model = model_obj[0]
@@ -122,7 +95,6 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
         
         # This assertion informs Pylance that the model is now valid
         assert self.model is not None, "Model failed to load from pretrained."
-
         if self.model_cfg.get("training_mode", {}).get("gradient_checkpointing", False):
             self.model.gradient_checkpointing_enable()
             ic("Gradient checkpointing enabled")
@@ -174,7 +146,7 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
                 ic("WandB experiment not initialized")
                 return
             
-            # Add an assertion to satisfy the type checker that the tokenizer is not None
+            # ✅ FIX: Use self.tokenizer, which has been correctly updated
             assert self.tokenizer is not None, "Tokenizer is None in _log_validation_samples"
             ic(f"Found WandB logger: {type(wandb_logger)}")
             
@@ -201,9 +173,10 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
                     input_ids[i], skip_special_tokens=True
                 )
                 
+                
                 # Decode target (handle -100 labels)
                 target_ids = batch["labels"][i]
-                target_ids = target_ids[target_ids != -100]  # Remove padding tokens
+                target_ids = target_ids[target_ids != -100] 
                 target_text = self.tokenizer.decode(
                     target_ids, skip_special_tokens=True
                 )
@@ -217,12 +190,13 @@ class KoBARTSummarizationModel(BaseSummarizationModel):
                 rouge_scores = self._calculate_sample_rouge(pred_text, target_text)
                 
                 samples_data.append([
+                    # ✅ FIX: Use the raw decoded strings, not the post-processed ones
                     input_text[:200] + "..." if len(input_text) > 200 else input_text,
                     target_text,
                     pred_text,
-                    rouge_scores["rouge1_f"],
-                    rouge_scores["rouge2_f"],
-                    rouge_scores["rougeL_f"]
+                    f"{rouge_scores.get('rouge1_f', 0.0):.4f}",
+                    f"{rouge_scores.get('rouge2_f', 0.0):.4f}",
+                    f"{rouge_scores.get('rougeL_f', 0.0):.4f}"
                 ])
 
             # Create WandB table

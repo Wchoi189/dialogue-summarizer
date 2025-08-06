@@ -1,9 +1,9 @@
 # FILE: configs/experiment/swap_unbiased_speaker.yaml
 # @package _global_
 # Override the preprocessing section with your token swapping strategy
-defaults:
-  - /config-baseline-centralized # Inherit from the base config
-  - _self_
+# defaults:
+#   - /config-baseline-centralized # Inherit from the base config
+#   - _self_
 # WandB tracking
 wandb:
   tags: ["using experiment", "swap_unbiased_speaker", "kobart"]
