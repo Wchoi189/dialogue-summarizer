@@ -25,15 +25,8 @@ token_swapping:
     "#Person5#": "현우"
     "#Person6#": "은영"
     "#Person7#": "동현"
-  additional_special_tokens: ["민준", "서연", "지훈", "수진", "현우", "은영", "동현"]
 
 # Special tokens to be added to the tokenizer
 special_tokens:
-  additional_special_tokens:
-    - "#Person1#"
-    - "#Person2#"
-    - "#Person3#"
-    - "#Person4#"
-    - "#Person5#"
-    - "#Person6#"
-    - "#Person7#"
+  additional_special_tokens: ["민준", "서연", "지훈", "수진", "현우", "은영", "동현"]
+

@@ -1,6 +1,11 @@
 # FILE: configs/postprocessing/swap_unbiased_speaker.yaml
 # @package postprocessing
 # Post-processing configuration for text generation
+strategy: "std"
+
+# ✅ FIX: Add max_length values to the standard preprocessing config
+max_input_length: 512
+max_target_length: 120
 
 token_swapping:
   enable: true

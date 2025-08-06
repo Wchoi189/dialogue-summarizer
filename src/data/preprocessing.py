@@ -34,10 +34,20 @@ class DialoguePreprocessor:
             ic("Token swapping enabled for preprocessing.")
             self.token_map = self.token_swapping_cfg.get("token_map", {})
 
+        # # Change the access path to the preprocessing_cfg object
+        # additional_special_tokens = self.preprocessing_cfg.get("additional_special_tokens", [])
+        # if additional_special_tokens:
+        #     self.tokenizer.add_tokens(additional_special_tokens) 
+        
+        # ✅ FIX: Load the topic map directly into the preprocessor
+        self.topic_map = self.preprocessing_cfg.get("topic_map", {})
+
         # ✅ FIX: Change the access path to the preprocessing_cfg object
         additional_special_tokens = self.preprocessing_cfg.get("additional_special_tokens", [])
         if additional_special_tokens:
             self.tokenizer.add_tokens(additional_special_tokens) 
+        
+        ic(f"DialoguePreprocessor initialized with {len(self.tokenizer)} tokens")
         
         ic(f"DialoguePreprocessor initialized with {len(self.tokenizer)} tokens")
 
@@ -94,9 +104,14 @@ class DialoguePreprocessor:
         self,
         dialogue: str,
         summary: Optional[str] = None,
-        is_inference: bool = False
-    ) -> BatchEncoding:
+        is_inference: bool = False,
+        topic_token: Optional[str] = None,
+        ) -> BatchEncoding:
         """Preprocesses and tokenizes a single dialogue-summary pair."""
+
+                # 📝 NEW: Prepend topic token if it exists
+        if topic_token:
+            dialogue = f"{topic_token} {dialogue}"
         #  The prepare_inputs function in preprocessing.py expects a configuration object where it can directly access max_input_length and max_target_length at the top level of its configuration attribute, like self.preprocessing_cfg.max_input_length
         dialogue = self.preprocess_dialogue(dialogue)
         

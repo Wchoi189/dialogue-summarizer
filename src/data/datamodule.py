@@ -18,7 +18,7 @@ from utils.config_utils import ConfigManager
 from utils.file_utils import FileManager
 from .dataset import create_collate_fn, create_datasets
 from .preprocessing import DialoguePreprocessor, create_preprocessor
-
+from .collate import create_collate_fn 
 logger = logging.getLogger(__name__)
 
 

@@ -71,7 +71,10 @@ class WandBManager:
 
         # Model name
         model_name = self.cfg.model.get('name', 'model').replace("_", "-")
-
+        
+        # 📝 NEW: Get the experiment name
+        experiment_name = self.cfg.get('experiment_name', 'no-exp')
+        
         # Preprocessing strategy (defaults to 'std')
         strategy = self.cfg.get("preprocessing", {}).get("strategy", "std")
         
@@ -86,15 +89,23 @@ class WandBManager:
         patience = self.cfg.training.early_stopping.get('patience')
         es_str = f"es{patience}" if patience else ""
 
+        # # --- 2. Assemble the Run Name ---
+        
+        # # Create the detailed middle part of the name
+        # details_parts = [model_name, strategy, f"b{batch_size}", f"lr{lr_str}", es_str]
+        # model_details = "-".join(filter(None, details_parts)) # Filter removes empty strings
+
+        # # Final desired format - use placeholder that can be replaced later
+        # run_name = f"{user_prefix}_(submission)_{model_details}_PLACEHOLDER"
         # --- 2. Assemble the Run Name ---
         
-        # Create the detailed middle part of the name
-        details_parts = [model_name, strategy, f"b{batch_size}", f"lr{lr_str}", es_str]
+        # 📝 FIX: Include the experiment name in the details list
+        details_parts = [experiment_name, model_name, strategy, f"b{batch_size}", f"lr{lr_str}", es_str]
         model_details = "-".join(filter(None, details_parts)) # Filter removes empty strings
 
         # Final desired format - use placeholder that can be replaced later
         run_name = f"{user_prefix}_(submission)_{model_details}_PLACEHOLDER"
-        
+
         return run_name
     
     def finalize_run_name_with_score(self, rouge_score: float):
@@ -141,45 +152,6 @@ class WandBManager:
         except Exception as e:
             ic(f"❌ Failed to finalize run name: {e}")
 
-    # def update_run_name_with_submission_score(self, rouge_score: float):
-    #     """Updates the run with final ROUGE score using tags and summary."""
-    #     if not (self.logger and self.logger.experiment):
-    #         ic("WandB logger not initialized, cannot update run info.")
-    #         return
-        
-    #     try:
-    #         # Update run summary with final score
-    #         self.logger.experiment.summary["final_rouge_f"] = rouge_score
-            
-    #         # Add final score as a tag
-    #         score_tag = f"R{rouge_score:.4f}"
-    #         current_tags = self.logger.experiment.tags
-            
-    #         # Convert tags to list if it's a tuple or None
-    #         if current_tags is None:
-    #             current_tags = []
-    #         elif isinstance(current_tags, tuple):
-    #             current_tags = list(current_tags)
-    #         elif not isinstance(current_tags, list):
-    #             current_tags = [current_tags] if current_tags else []
-            
-    #         # Add score tag if not already present
-    #         if score_tag not in current_tags:
-    #             current_tags.append(score_tag)
-    #             self.logger.experiment.tags = current_tags
-            
-    #         # Log the final score as a metric
-    #         self.logger.experiment.log({"final_submission_score": rouge_score})
-            
-    #         # Update the run's display name in the summary (this shows in the UI)
-    #         current_name = self.logger.experiment.name
-    #         display_name = f"{current_name}_R{rouge_score:.4f}"
-    #         self.logger.experiment.summary["display_name"] = display_name
-            
-    #         ic(f"Updated WandB run with final score: R{rouge_score:.4f}")
-            
-    #     except Exception as e:
-    #         ic(f"Failed to update WandB run with score: {e}")
     def update_run_name_with_submission_score(self, rouge_score: float):
         """Updates the run with final ROUGE score using tags and summary."""
         if not (self.logger and self.logger.experiment):

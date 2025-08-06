@@ -19,10 +19,11 @@ remove_tokens:
   - "</s>"
   - "<pad>"
   - "<unk>"
-  - "화자1"
-  - "화자2"
-  - "화자3"
-  - "화자4"
-  - "화자5"
-  - "화자6"
-  - "화자7"
+
+# Advanced cleaning
+advanced:
+  min_length: 10
+  max_repetition_ratio: 0.3
+  remove_repetitive_phrases: true
+  # ✅ NEW: Clean up dialogue formatting issues
+  clean_dialogue_artifacts: true

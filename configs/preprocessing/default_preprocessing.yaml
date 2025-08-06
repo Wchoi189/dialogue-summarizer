@@ -1,4 +1,6 @@
+# FILE: configs/preprocessing/default_preprocessing.yaml
 # @package preprocessing
+# Preprocessing configuration for text generation
 strategy: "std"
 max_input_length: 512
 max_target_length: 60

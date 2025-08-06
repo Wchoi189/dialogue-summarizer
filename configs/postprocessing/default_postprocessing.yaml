@@ -1,4 +1,6 @@
+# FILE: configs/postprocessing/default_postprocessing.yaml
 # @package postprocessing
+# Postprocessing configuration for text generation
 skip_special_tokens: false
 remove_tokens:
   - "<usr>"

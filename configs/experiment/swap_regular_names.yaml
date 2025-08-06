@@ -1,23 +1,25 @@
 # FILE: configs/experiment/swap_regular_names.yaml
 # @package _global_
-# defaults:
-#   - /config-baseline-centralized # Inherit from the base config
-#   - _self_
-# Override the preprocessing section with your token swapping strategy
+# This experiment trains with named speaker tokens
 
-# WandB tracking
-wandb:
-  tags: ["using experiment", "potential bias", "kobart"]
-  notes: "This is experiment config: token swapping experiment - using natural names"
+
 # =============================================================================
 # EXPERIMENT METADATA
 # =============================================================================
 experiment_name: "swap_regular_speaker"
 
-
-# and add your token_swapping settings to it.
-# Override the preprocessing section with your token swapping strategy
+# =============================================================================
+# PREPROCESSING AND POSTPROCESSING OVERRIDES
+# These blocks completely override the ones from the base config.
+# =============================================================================
 preprocessing:
+  strategy: "std"
+  max_input_length: 512
+  max_target_length: 120
+  truncation: true
+  padding: false
+  normalize_whitespace: true
+  remove_extra_newlines: true
   token_swapping:
     enable: true
     token_map:
@@ -28,9 +30,9 @@ preprocessing:
       "#Person5#": "현우"
       "#Person6#": "은영"
       "#Person7#": "동현"
+  special_tokens:
     additional_special_tokens: ["민준", "서연", "지훈", "수진", "현우", "은영", "동현"]
 
-# Override the post-processing section for the reverse swap
 postprocessing:
   token_swapping:
     enable: true
@@ -48,13 +50,6 @@ postprocessing:
     - "</s>"
     - "<pad>"
     - "<unk>"
-    # - "민준"
-    # - "서연"
-    # - "지훈"
-    # - "수진"
-    # - "현우"
-    # - "은영"
-    # - "동현"
   text_cleaning:
     strip_whitespace: true
     normalize_whitespace: true

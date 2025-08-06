@@ -1,24 +1,29 @@
 # FILE: configs/experiment/swap_unbiased_speaker.yaml
 # @package _global_
-# Override the preprocessing section with your token swapping strategy
-# defaults:
-#   - /config-baseline-centralized # Inherit from the base config
-#   - _self_
-# WandB tracking
-wandb:
-  tags: ["using experiment", "swap_unbiased_speaker", "kobart"]
-  notes: "Unbiased speaker swapping experiment - no specific names"
+# This experiment trains with unbiased speaker tokens
+
 # =============================================================================
 # EXPERIMENT METADATA
 # =============================================================================
 experiment_name: "swap_unbiased_speaker"
 
+# =============================================================================
+# PREPROCESSING AND POSTPROCESSING OVERRIDES
+# These blocks completely override the ones from the base config.
+# =============================================================================
 preprocessing:
+  strategy: "std"
+  max_input_length: 512
+  max_target_length: 120
+  truncation: true
+  padding: false
+  normalize_whitespace: true
+  remove_extra_newlines: true
   token_swapping:
     enable: true
     token_map:
-      "#Person1#": "화자1"  # Speaker 1
-      "#Person2#": "화자2"  # Speaker 2
+      "#Person1#": "화자1"
+      "#Person2#": "화자2"
       "#Person3#": "화자3"
       "#Person4#": "화자4"
       "#Person5#": "화자5"
@@ -27,7 +32,6 @@ preprocessing:
   special_tokens:
     additional_special_tokens: ["화자1", "화자2", "화자3", "화자4", "화자5", "화자6", "화자7"]
 
-# ✅ NEW: Add a postprocessing block to enable the swap
 postprocessing:
   token_swapping:
     enable: true
@@ -45,10 +49,6 @@ postprocessing:
     - "</s>"
     - "<pad>"
     - "<unk>"
-    - "화자1"
-    - "화자2"
-    - "화자3"
-    - "화자4"
-    - "화자5"
-    - "화자6"
-    - "화자7"
+  # 📝 FIX: Remove the new speaker tokens from this list to allow them to be swapped back.
+  # - "화자1"
+  # ...

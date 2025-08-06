@@ -12,7 +12,7 @@ import torch
 from icecream import ic
 from omegaconf import DictConfig
 from torch.utils.data import Dataset
-
+from .collate import create_collate_fn  # 📝 NEW: Import the collate function
 from .preprocessing import DialoguePreprocessor
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,14 @@ class DialogueDataset(Dataset):
         self.id_col = cfg.columns.id
         self.input_col = cfg.columns.input
         self.target_col = cfg.columns.target
+        self.topic_col = cfg.columns.topic 
         
+        # ✅ FIX: Load the topic map from the preprocessor's config
+        # This resolves the ConfigAttributeError by accessing the correct object
+        self.topic_map = self.preprocessor.cfg.preprocessing.get("topic_map", {})
+        # ✅ NEW: Load the topic map from the config instead of hardcoding
+        # self.topic_map = self.cfg.preprocessing.get("topic_map", {})        
+
         # Validate data
         self._validate_data()
         
@@ -75,32 +82,24 @@ class DialogueDataset(Dataset):
         """
         Get a single sample.
         """
-        # row = self.data.iloc[idx]
-        # dialogue = str(row[self.input_col])
-        # sample = self.data.iloc[idx]
-        # #  CORRECT: This finds "#Person1#" and replaces it with "화자1"
-        # # dialogue = dialogue.replace("#Person1#", "화자1").replace("#Person2#", "화자2").replace("#Person3#", "화자3")
-    
-        # dialogue = self.preprocessor._swap_tokens(str(row[self.input_col]))
-        
-        # summary = None
-        # if self.cfg.columns.target in self.data.columns:
-        #     summary = self.preprocessor._swap_tokens(str(row[self.cfg.columns.target]))     
-
-        # # Preprocess and tokenize
-        # inputs = self.preprocessor.prepare_inputs(
-        #     dialogue=dialogue,
-        #     summary=summary,
-        #     is_inference=self.is_inference
-        # )
         row = self.data.iloc[idx]
         
         dialogue_text = str(row[self.input_col])
         summary_text = str(row[self.target_col])
+        
+        # ✅ FIX: Get the topic map from the preprocessor
+        topic_map = self.preprocessor.topic_map
+        # ✅ NEW: Get the raw topic from the DataFrame
+        topic_raw = str(row[self.cfg.columns.topic])
+        
+        # ✅ NEW: Use the dynamic topic_map
+        topic_token = self.topic_map.get(topic_raw, "<기타>") # Default to '<기타>' for unknown topics
 
         # Apply the swap
         dialogue_swapped = self.preprocessor._swap_tokens(dialogue_text)
         summary_swapped = self.preprocessor._swap_tokens(summary_text)
+
+
 
         # 📝 NEW: Log the text only for the first 5 samples
         if idx < 5:
@@ -113,7 +112,8 @@ class DialogueDataset(Dataset):
         inputs = self.preprocessor.prepare_inputs(
             dialogue=dialogue_swapped,
             summary=summary_swapped,
-            is_inference=self.is_inference
+            is_inference=self.is_inference,
+            topic_token=topic_token # 📝 NEW: Pass the topic token
         )
 
         # Convert to tensors and squeeze batch dimension
@@ -211,58 +211,58 @@ class InferenceDataset(DialogueDataset):
         # ✅ FIX: Simply call the parent method, as the logic is now there.
         return super().__getitem__(idx)
 
-class CollateFunction:
-    """Fixed collate function for dialogue data."""
+# class CollateFunction:
+#     """Fixed collate function for dialogue data."""
     
-    def __init__(self, tokenizer, is_inference: bool = False):
-        """
-        Initialize collate function.
-        """
-        self.tokenizer = tokenizer
-        self.is_inference = is_inference
+#     def __init__(self, tokenizer, is_inference: bool = False):
+#         """
+#         Initialize collate function.
+#         """
+#         self.tokenizer = tokenizer
+#         self.is_inference = is_inference
     
-    def __call__(self, batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        """
-        Collate batch of samples.
-        """
-        # Separate keys
-        tensor_keys = ["input_ids", "attention_mask"]
-        if not self.is_inference:
-            tensor_keys.append("labels")
+#     def __call__(self, batch: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
+#         """
+#         Collate batch of samples.
+#         """
+#         # Separate keys
+#         tensor_keys = ["input_ids", "attention_mask"]
+#         if not self.is_inference:
+#             tensor_keys.append("labels")
         
-        # Initialize batch dict
-        batched = {}
+#         # Initialize batch dict
+#         batched = {}
         
-        # Collect sample IDs
-        sample_ids = [sample["sample_id"] for sample in batch]
-        batched["sample_ids"] = sample_ids
+#         # Collect sample IDs
+#         sample_ids = [sample["sample_id"] for sample in batch]
+#         batched["sample_ids"] = sample_ids
         
-        # Pad and batch tensor data
-        for key in tensor_keys:
-            if key in batch[0]:
-                sequences = [sample[key] for sample in batch]
+#         # Pad and batch tensor data
+#         for key in tensor_keys:
+#             if key in batch[0]:
+#                 sequences = [sample[key] for sample in batch]
                 
-                # Ensure all sequences are 1D tensors
-                sequences = [seq.squeeze() if seq.dim() > 1 else seq for seq in sequences]
+#                 # Ensure all sequences are 1D tensors
+#                 sequences = [seq.squeeze() if seq.dim() > 1 else seq for seq in sequences]
                 
-                # Determine padding value
-                if key == "labels":
-                    padding_value = -100
-                elif key == "input_ids":
-                    padding_value = self.tokenizer.pad_token_id or 0
-                else:
-                    padding_value = 0
+#                 # Determine padding value
+#                 if key == "labels":
+#                     padding_value = -100
+#                 elif key == "input_ids":
+#                     padding_value = self.tokenizer.pad_token_id or 0
+#                 else:
+#                     padding_value = 0
                 
-                # Pad sequences
-                padded = torch.nn.utils.rnn.pad_sequence(
-                    sequences,
-                    batch_first=True,
-                    padding_value=padding_value
-                )
+#                 # Pad sequences
+#                 padded = torch.nn.utils.rnn.pad_sequence(
+#                     sequences,
+#                     batch_first=True,
+#                     padding_value=padding_value
+#                 )
                 
-                batched[key] = padded
+#                 batched[key] = padded
         
-        return batched
+#         return batched
 
 def create_datasets(
     cfg: DictConfig,
@@ -297,8 +297,8 @@ def create_datasets(
     return datasets
 
 
-def create_collate_fn(tokenizer, is_inference: bool = False) -> CollateFunction:
-    """
-    Create collate function for DataLoader.
-    """
-    return CollateFunction(tokenizer, is_inference)
+# def create_collate_fn(tokenizer, is_inference: bool = False) -> CollateFunction:
+#     """
+#     Create collate function for DataLoader.
+#     """
+#     return CollateFunction(tokenizer, is_inference)

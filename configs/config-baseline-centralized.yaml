@@ -8,8 +8,8 @@ defaults:
   - _self_
   - dataset: dialogue_data
   - model: kobart
-  - preprocessing: swap_unbiased_speaker
-  - postprocessing: swap_unbiased_speaker
+  - preprocessing: default_preprocessing 
+  - postprocessing: default_postprocessing 
   - pytorch: default
   - inference: generation
   - experiment: null
@@ -86,7 +86,14 @@ model:
 # PREPROCESSING CONFIGURATION
 # =============================================================================
 # Removed the redundant block here. This is now handled by the `defaults` list
-
+preprocessing:
+  strategy: "std"
+  max_input_length: 512
+  max_target_length: 130
+  truncation: true
+  padding: false
+  normalize_whitespace: true
+  remove_extra_newlines: true
 # =============================================================================
 # POSTPROCESSING CONFIGURATION
 # =============================================================================
@@ -109,10 +116,10 @@ training:
   # Optimizer
   optimizer:
     name: "adamw"
-    lr: 1e-5
+    lr: 2e-5
     weight_decay: 0.05
     betas: [0.9, 0.999]
-    eps: 1e-8
+    eps: 5e-8
 
   # Scheduler
   lr_scheduler:
@@ -133,7 +140,7 @@ training:
     enabled: true
     monitor: "val/rouge_f"
     mode: "max"
-    patience: 3
+    patience: 5
     min_delta: 0.01
     verbose: true
 
