@@ -3,13 +3,13 @@
 # Top-level generation configuration
 
 # Length control
-max_length: 40
+max_length: 50
 min_length: 5
 max_new_tokens: null # Use max_length by default
 
 # Beam search
 num_beams: 5
-num_beam_groups: 1
+num_beam_groups: 2
 diversity_penalty: 0.0
 
 # Sampling (disabled by default for deterministic output)

@@ -541,12 +541,28 @@ def main():
     # Set environment variables for reproducibility
     os.environ["PYTHONHASHSEED"] = "0"
 
-    # ADD THIS LINE to optimize for Tensor Cores
-    torch.set_float32_matmul_precision('medium')    
+ 
 
     # Enable faster PyTorch operations
-    torch.backends.cudnn.benchmark = True
+    # torch.backends.cudnn.benchmark = False
     
+# --- Configuration (Should be inside a main function) ---
+# Suppress informational messages from the transformers library
+    from transformers import logging
+    logging.set_verbosity_error()
+
+    # === FIX START ===
+    # Add this section to fix cuDNN execution plan errors
+    try:
+        # ADD THIS LINE to optimize for Tensor Cores
+        torch.set_float32_matmul_precision('medium')   
+        # Disables cuDNN's auto-tuner, which can sometimes fail to find a valid plan.
+        torch.backends.cudnn.benchmark = True
+        # Enables deterministic algorithms, which can help with stability.
+        torch.backends.cudnn.deterministic = False
+    except Exception as e:
+        ic(f"Could not set cuDNN flags: {e}")
+    # === FIX END ===
     cli()
 
 

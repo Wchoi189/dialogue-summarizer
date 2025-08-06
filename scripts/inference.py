@@ -13,17 +13,21 @@ import click
 import pandas as pd
 import pytorch_lightning as pl
 import torch
+from omegaconf import DictConfig
+
 from icecream import ic
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
+from omegaconf import DictConfig # This import is correct
+from torch.serialization import add_safe_globals
 from data.datamodule import DialogueDataModule
 from inference.predictor import DialoguePredictor
 from models.kobart_model import KoBARTSummarizationModel
 from utils.config_utils import ConfigManager
 from utils.file_utils import FileManager, create_submission_file
 from utils.logging_utils import setup_logging
+add_safe_globals([DictConfig, dict])
 
 # Centralized configuration file defined.
 CONFIG_FILE = "config-baseline-centralized"
@@ -85,15 +89,18 @@ class InferenceRunner:
         # Load model
         ic("Loading model from checkpoint...")
         # Before (Remove the cfg argument due to struct error.)
+        model = KoBARTSummarizationModel.load_from_checkpoint(
+                checkpoint_path,
+                # strict=False,
+                # map_location='cpu',
+                # weights_only=False
+        )
+
+        # # AFTER (loads checkpoint without passing any extra arguments)
         # model = KoBARTSummarizationModel.load_from_checkpoint(
         #     checkpoint_path,
-        #     cfg=self.cfg
+        #     weights_only=False
         # )
-
-        # AFTER (loads checkpoint without passing any extra arguments)
-        model = KoBARTSummarizationModel.load_from_checkpoint(
-            checkpoint_path
-        )
         
         # Create predictor
         predictor = DialoguePredictor(model, self.cfg)
@@ -323,11 +330,15 @@ def batch(checkpoint_path, input_dir, output_dir, pattern, config_name):
 
 def main():
     """Main entry point using Click CLI."""
-    # Set environment variables
+    import traceback
     os.environ["PYTHONHASHSEED"] = "0"
-    
-    cli()
-
+    try:
+        cli()
+    except Exception as e:
+        print("\n[ERROR] Uncaught exception in inference script:")
+        print(e)
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

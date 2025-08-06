@@ -1,8 +1,8 @@
 # FILE: configs/experiment/swap_regular_names.yaml
 # @package _global_
-defaults:
-  - /config-baseline-centralized # Inherit from the base config
-  - _self_
+# defaults:
+#   - /config-baseline-centralized # Inherit from the base config
+#   - _self_
 # Override the preprocessing section with your token swapping strategy
 
 # WandB tracking

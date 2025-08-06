@@ -1,0 +1,43 @@
+# FILE: configs/postprocessing/swap_regular_names.yaml
+# @package postprocessing
+# Post-processing configuration for text generation
+
+#
+token_swapping:
+  enable: true
+  token_map:
+    "#Person1#": "민준"
+    "#Person2#": "서연"
+    "#Person3#": "지훈"
+    "#Person4#": "수진"
+    "#Person5#": "현우"
+    "#Person6#": "은영"
+    "#Person7#": "동현"
+remove_tokens:
+  - "<usr>"
+  - "<s>"
+  - "</s>"
+  - "<pad>"
+  - "<unk>"
+  # - "민준"
+  # - "서연"
+  # - "지훈"
+  # - "수진"
+  # - "현우"
+  # - "은영"
+  # - "동현"
+text_cleaning:
+  strip_whitespace: true
+  normalize_whitespace: true
+  remove_empty_lines: true
+korean_specific:
+  remove_special_markers: false
+  normalize_punctuation: true
+
+# Advanced cleaning
+advanced:
+  min_length: 10
+  max_repetition_ratio: 0.3
+  remove_repetitive_phrases: true
+  # ✅ NEW: Clean up dialogue formatting issues
+  clean_dialogue_artifacts: true

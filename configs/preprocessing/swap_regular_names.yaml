@@ -15,6 +15,18 @@ padding: false
 normalize_whitespace: true
 remove_extra_newlines: true
 
+token_swapping:
+  enable: false
+  token_map:
+    "#Person1#": "민준"
+    "#Person2#": "서연"
+    "#Person3#": "지훈"
+    "#Person4#": "수진"
+    "#Person5#": "현우"
+    "#Person6#": "은영"
+    "#Person7#": "동현"
+  additional_special_tokens: ["민준", "서연", "지훈", "수진", "현우", "은영", "동현"]
+
 # Special tokens to be added to the tokenizer
 special_tokens:
   additional_special_tokens:

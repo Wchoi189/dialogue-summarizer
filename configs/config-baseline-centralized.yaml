@@ -8,8 +8,8 @@ defaults:
   - _self_
   - dataset: dialogue_data
   - model: kobart
-  - preprocessing: standard
-  - postprocessing: default
+  - preprocessing: swap_regular_names
+  - postprocessing: swap_regular_names
   - pytorch: default
   - inference: generation
   - experiment: null
