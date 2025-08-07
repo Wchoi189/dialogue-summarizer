@@ -13,18 +13,24 @@ import click
 import pandas as pd
 import pytorch_lightning as pl
 import torch
+from omegaconf import DictConfig
+
 from icecream import ic
 
 # Add src to path
-sys.path.append(str(Path(__file__).parent.parent / "src"))
-
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+from omegaconf import DictConfig # This import is correct
+from torch.serialization import add_safe_globals
 from data.datamodule import DialogueDataModule
 from inference.predictor import DialoguePredictor
 from models.kobart_model import KoBARTSummarizationModel
 from utils.config_utils import ConfigManager
 from utils.file_utils import FileManager, create_submission_file
 from utils.logging_utils import setup_logging
+add_safe_globals([DictConfig, dict])
 
+# Centralized configuration file defined.
+CONFIG_FILE = "config-baseline-centralized"
 
 class InferenceRunner:
     """Main inference runner for dialogue summarization."""
@@ -40,7 +46,7 @@ class InferenceRunner:
         checkpoint_path: str,
         test_file: str,
         output_file: str,
-        config_name: str = "config",
+        config_name: str,
         config_path: Optional[str] = None,
         batch_size: Optional[int] = None,
         overrides: Optional[List[str]] = None
@@ -82,10 +88,19 @@ class InferenceRunner:
         
         # Load model
         ic("Loading model from checkpoint...")
+        # Before (Remove the cfg argument due to struct error.)
         model = KoBARTSummarizationModel.load_from_checkpoint(
-            checkpoint_path,
-            cfg=self.cfg
+                checkpoint_path,
+                # strict=False,
+                # map_location='cpu',
+                # weights_only=False
         )
+
+        # # AFTER (loads checkpoint without passing any extra arguments)
+        # model = KoBARTSummarizationModel.load_from_checkpoint(
+        #     checkpoint_path,
+        #     weights_only=False
+        # )
         
         # Create predictor
         predictor = DialoguePredictor(model, self.cfg)
@@ -110,8 +125,8 @@ class InferenceRunner:
     def create_submission(
         self,
         checkpoint_path: str,
-        output_file: str = "submission.csv",
-        config_name: str = "config",
+        output_file: str,
+        config_name: str,
         config_path: Optional[str] = None,
         batch_size: Optional[int] = None
     ) -> str:
@@ -237,16 +252,25 @@ def cli():
 @click.argument('checkpoint_path', type=click.Path(exists=True))
 @click.argument('test_file', type=click.Path(exists=True))
 @click.argument('output_file', type=click.Path())
-@click.option('--config-name', default='config', help='Configuration name')
+@click.option('--config-name', default=CONFIG_FILE, help='Configuration name')
 @click.option('--config-path', type=click.Path(), help='Custom config directory')
-@click.option('--batch-size', type=int, help='Override batch size')
-def predict(checkpoint_path, test_file, output_file, config_name, config_path, batch_size):
+@click.option('--batch-size', type=int, help='Override evaluation batch size')
+@click.option(
+    '--override', 
+    'overrides', 
+    multiple=True, 
+    help='Custom Hydra overrides (e.g., "generation.max_length=80")'
+)
+def predict(checkpoint_path, test_file, output_file, config_name, config_path, batch_size, overrides):
     """Generate predictions for test data."""
     runner = InferenceRunner()
     
-    overrides = []
+    # Convert the 'overrides' tuple to a list so we can modify it
+    final_overrides = list(overrides)
+    
+    # The existing --batch-size flag is a convenient shortcut
     if batch_size:
-        overrides.append(f"dataset.eval_batch_size={batch_size}")
+        final_overrides.append(f"dataset.eval_batch_size={batch_size}")
     
     output_path = runner.predict(
         checkpoint_path=checkpoint_path,
@@ -254,8 +278,7 @@ def predict(checkpoint_path, test_file, output_file, config_name, config_path, b
         output_file=output_file,
         config_name=config_name,
         config_path=config_path,
-        batch_size=batch_size,
-        overrides=overrides
+        overrides=final_overrides
     )
     
     click.echo(f"Predictions saved to: {output_path}")
@@ -263,8 +286,8 @@ def predict(checkpoint_path, test_file, output_file, config_name, config_path, b
 
 @cli.command()
 @click.argument('checkpoint_path', type=click.Path(exists=True))
-@click.option('--output-file', default='submission.csv', help='Output submission file')
-@click.option('--config-name', default='config', help='Configuration name')
+@click.option('--output-file', default='submission_s.csv', help='Output submission file')
+@click.option('--config-name', default=CONFIG_FILE, help='Configuration name')
 @click.option('--config-path', type=click.Path(), help='Custom config directory')
 @click.option('--batch-size', type=int, help='Override batch size')
 def submission(checkpoint_path, output_file, config_name, config_path, batch_size):
@@ -287,7 +310,7 @@ def submission(checkpoint_path, output_file, config_name, config_path, batch_siz
 @click.argument('input_dir', type=click.Path(exists=True))
 @click.argument('output_dir', type=click.Path())
 @click.option('--pattern', default='*.csv', help='File pattern to match')
-@click.option('--config-name', default='config', help='Configuration name')
+@click.option('--config-name', default=CONFIG_FILE, help='Configuration name')
 def batch(checkpoint_path, input_dir, output_dir, pattern, config_name):
     """Run batch prediction on multiple files."""
     runner = InferenceRunner()
@@ -307,11 +330,15 @@ def batch(checkpoint_path, input_dir, output_dir, pattern, config_name):
 
 def main():
     """Main entry point using Click CLI."""
-    # Set environment variables
+    import traceback
     os.environ["PYTHONHASHSEED"] = "0"
-    
-    cli()
-
+    try:
+        cli()
+    except Exception as e:
+        print("\n[ERROR] Uncaught exception in inference script:")
+        print(e)
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,198 @@
+# FILE: configs/config-baseline-centralized.yaml
+# @package _global_
+# CENTRALIZED CONFIGURATION
+# Single source of truth for all settings
+# Use experiment configs for overrides
+# If overrides are needed, define experiment in defaults below
+defaults:
+  - _self_
+  - dataset: dialogue_data
+  - model: kobart
+  - preprocessing: default_preprocessing 
+  - postprocessing: default_postprocessing 
+  - pytorch: default
+  # - inference: generation
+  - experiment: emergency_fix
+ 
+# =============================================================================
+# EXPERIMENT METADATA
+# =============================================================================
+# experiment_name: "config-baseline-centralized"
+experiment_name: null  # Set by experiment config
+run_name: null  # Auto-generated
+seed: 42
+
+# =============================================================================
+# EXPERIMENT TRACKING
+# =============================================================================
+wandb:
+  project: "dialogue-summarization(wb2x)"
+  entity: "boot_camp_13_2nd_group_2nd"
+  username: "wchoi189@gmail.com"
+  tags: ["kobart", "centralized", "main config"]
+  notes: "This is Main config: config-baseline-centralized.yaml"
+  offline: false
+  log_model: false
+  watch: false
+
+# =============================================================================
+# DATA CONFIGURATION
+# =============================================================================
+dataset:
+  # Paths
+  data_path: "/home/wb2x/workspace/dialogue-summarizer/data"
+  files:
+    train: "train.csv"
+    dev: "dev.csv" 
+    test: "test.csv"
+    submission_template: "sample_submission.csv"
+
+  # Column mappings
+  columns:
+    id: "fname"
+    input: "dialogue"
+    target: "summary"
+    topic: "topic"
+
+  # Batch settings
+  batch_size: 16
+  eval_batch_size: 32
+  num_workers: 8
+  pin_memory: true
+  shuffle_train: true
+  shuffle_val: false
+  drop_last: false
+
+# =============================================================================
+# MODEL CONFIGURATION
+# =============================================================================
+model:
+  # Model selection
+  name: "kobart"
+  architecture: "bart"
+  model_name_or_path: "digit82/kobart-summarization"
+
+  tokenizer:
+    # Tokenizer (same as model)
+    name_or_path: "digit82/kobart-summarization"
+    use_fast: true
+
+  # Model compilation
+  compile:
+    enabled: true
+    mode: "default"
+    dynamic: true
+
+# =============================================================================
+# PREPROCESSING CONFIGURATION
+# =============================================================================
+# Removed the redundant block here. This is now handled by the `defaults` list
+preprocessing:
+  strategy: "std"
+  max_input_length: 512
+  max_target_length: 130
+  truncation: true
+  padding: false
+  normalize_whitespace: true
+  remove_extra_newlines: true
+# =============================================================================
+# POSTPROCESSING CONFIGURATION
+# =============================================================================
+# Removed the redundant block here. This is now handled by the `defaults` list
+
+# =============================================================================
+# TRAINING CONFIGURATION
+# =============================================================================
+training:
+  accelerator: "auto"
+  devices: 1
+  precision: "16-mixed"
+  max_steps: -1
+  max_epochs: 12
+  accumulate_grad_batches: 4
+  overfit_batches: 0.0
+  limit_train_batches: 1.0
+  limit_val_batches: 1.0
+
+  # Optimizer
+  optimizer:
+    name: "adamw"
+    lr: 2e-5
+    weight_decay: 0.05
+    betas: [0.9, 0.999]
+    eps: 5e-8
+
+  # Scheduler
+  lr_scheduler:
+    name: "cosine"
+    warmup_ratio: 0.1
+
+  # Validation
+  val_check_interval: 1.0
+  check_val_every_n_epoch: 1
+
+  # Model saving
+  monitor: "val/rouge_f"
+  mode: "max"
+  save_top_k: 1
+
+  # Early stopping
+  early_stopping:
+    enabled: true
+    monitor: "val/rouge_f"
+    mode: "max"
+    patience: 5
+    min_delta: 0.01
+    verbose: true
+
+  # Gradient clipping
+  gradient_clip_val: 1.0
+  gradient_clip_algorithm: "norm"
+
+  # For debug overrides
+  fast_dev_run: false
+
+# =============================================================================
+# INFERENCE CONFIGURATION
+# =============================================================================
+inference:
+  checkpoint_path: null
+
+# =============================================================================
+# GENERATION CONFIGURATION
+# =============================================================================
+generation:
+  max_length: ???  # Must be set by experiment or override
+  min_length: ???  # Must be set by experiment or override
+  num_beams: ???   # Must be set by experiment or override
+  repetition_penalty: ???  # Must be set by experiment or override
+  length_penalty: ???      # Must be set by experiment or override
+  early_stopping: ???      # Must be set by experiment or override
+  do_sample: ???           # Must be set by experiment or override
+  no_repeat_ngram_size: ??? # Must be set by experiment or override
+
+# =============================================================================
+# OUTPUT DIRECTORIES
+# =============================================================================
+output_dir: "outputs"
+paths:
+  log_dir: "${output_dir}/logs"
+  model_dir: "${output_dir}/models"
+  prediction_dir: "${output_dir}/predictions"
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+logging:
+  level: "INFO"
+  use_rich: true
+  file: "${paths.log_dir}/${experiment_name}.log"
+  log_every_n_steps: 50
+
+# =============================================================================
+# PYTORCH SETTINGS
+# =============================================================================
+pytorch:
+  float32_matmul_precision: "medium"
+  cudnn_benchmark: true
+  empty_cache_steps: 50

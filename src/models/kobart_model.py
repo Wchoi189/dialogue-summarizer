@@ -1,390 +1,258 @@
+# FILE: src/models/kobart_model.py
 """
 KoBART model implementation for Korean dialogue summarization.
-Based on BART architecture with Korean language support.
 """
-
 import logging
-from typing import Any, Dict, Optional
-
+from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 import torch
 from icecream import ic
 from omegaconf import DictConfig
-from transformers import AutoTokenizer, BartConfig, BartForConditionalGeneration
-
+from transformers import AutoTokenizer, BartForConditionalGeneration
+from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from .base_model import BaseSummarizationModel
-
+import wandb
 logger = logging.getLogger(__name__)
 
 
+if TYPE_CHECKING:
+    from wandb.sdk.wandb_run import Run as WandbRun
+    from pytorch_lightning.loggers import Logger
 class KoBARTSummarizationModel(BaseSummarizationModel):
-    """KoBART model for dialogue summarization."""
     
+    # ✅ FIX: Add a type hint here for Pylance
+    model: BartForConditionalGeneration
+
     def __init__(self, cfg: DictConfig):
-        """
-        Initialize KoBART model.
-        
-        Args:
-            cfg: Complete configuration
-        """
+        """Initializes the tokenizer, model, and resizes embeddings."""
         super().__init__(cfg)
         
-        # Setup tokenizer first (needed for model initialization)
+        # 1. Setup the tokenizer and model
         self._setup_tokenizer()
-        
-        # Setup model
         self._setup_model()
         
-        # Resize token embeddings if special tokens were added
-        if hasattr(self.tokenizer, 'vocab_size'):
-            original_vocab_size = self.model.config.vocab_size
-            current_vocab_size = len(self.tokenizer)
-            
-            if current_vocab_size > original_vocab_size:
-                ic(f"Resizing token embeddings: {original_vocab_size} -> {current_vocab_size}")
-                self.model.resize_token_embeddings(current_vocab_size)
+        # 2. Assert that components are valid before proceeding
+        assert self.model is not None, "Model failed to initialize in _setup_model."
+        assert self.tokenizer is not None, "Tokenizer failed to initialize in _setup_tokenizer."
         
+        # 3. CRITICAL: Resize model embeddings to match the tokenizer's new vocabulary size
+        # ✅ FIX: Use a cast here to explicitly tell Pylance the type
+        model_obj = cast(BartForConditionalGeneration, self.model)
+        original_vocab_size = model_obj.config.vocab_size
+        current_vocab_size = len(self.tokenizer)
+        if current_vocab_size > original_vocab_size:
+            ic(f"Resizing token embeddings: {original_vocab_size} -> {current_vocab_size}")
+            model_obj.resize_token_embeddings(current_vocab_size)
+
+        # 4. Setup generation config for validation logging (AFTER tokenizer setup)
+        self.generation_config = {
+            "max_length": cfg.generation.get("max_length", 50),
+            "num_beams": cfg.generation.get("num_beams", 4),
+            "repetition_penalty": cfg.generation.get("repetition_penalty", 1.4),
+            "early_stopping": True,
+            "do_sample": False,
+            "pad_token_id": self.tokenizer.pad_token_id,
+            "eos_token_id": self.tokenizer.eos_token_id,
+            "bos_token_id": self.tokenizer.bos_token_id,
+        }
+
         ic(f"KoBARTSummarizationModel initialized with {self.get_parameter_count()} parameters")
-    
+
     def _setup_tokenizer(self) -> None:
-        """Setup KoBART tokenizer with special tokens."""
+        """Initializes the tokenizer and adds special tokens from the config."""
         tokenizer_cfg = self.model_cfg.tokenizer
-        model_name = tokenizer_cfg.name_or_path
-        
-        ic(f"Loading tokenizer: {model_name}")
-        
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_name,
+            tokenizer_cfg.name_or_path,
             use_fast=tokenizer_cfg.get("use_fast", True)
         )
+        assert self.tokenizer is not None, "Tokenizer failed to load from pretrained."
+        ic(f"Initial tokenizer vocabulary size: {len(self.tokenizer)}")
         
-        # Add special tokens if specified
-        additional_tokens = tokenizer_cfg.get("additional_special_tokens", [])
-        if additional_tokens:
-            # Ensure tokens are strings
-            additional_tokens = [str(token) for token in additional_tokens]
-            special_tokens_dict = {"additional_special_tokens": additional_tokens}
-            num_added = self.tokenizer.add_special_tokens(special_tokens_dict)
-            ic(f"Added {num_added} special tokens: {additional_tokens}")
+        # ✅ FIX: Use the correct path to the list of additional special tokens
+        additional_special_tokens = self.cfg.preprocessing.get("token_swapping", {}).get("additional_special_tokens", [])
         
-        # Verify special tokens
-        special_tokens = {
-            "bos_token": self.tokenizer.bos_token,
-            "eos_token": self.tokenizer.eos_token,
-            "pad_token": self.tokenizer.pad_token,
-            "unk_token": self.tokenizer.unk_token,
-        }
-        ic(f"Special tokens: {special_tokens}")
-    
+        if additional_special_tokens:
+            # ✅ NEW: Check if any of the special tokens are already in the vocabulary
+            pre_existing_tokens = [token for token in additional_special_tokens if token in self.tokenizer.get_vocab()]
+            if pre_existing_tokens:
+                ic(f"Warning: The following special tokens already exist in the tokenizer's vocabulary: {pre_existing_tokens}")
+            
+            self.tokenizer.add_tokens([str(t) for t in additional_special_tokens])
+            
+            ic(f"Final tokenizer vocabulary size: {len(self.tokenizer)}")
+            ic(f"Added special tokens: {additional_special_tokens}")
+
     def _setup_model(self) -> None:
-        """Setup KoBART model."""
-        model_name = self.model_cfg.model_name_or_path
-        
-        ic(f"Loading model: {model_name}")
-        
-        # Load model configuration
-        config = BartConfig.from_pretrained(model_name)
-        
-        # Update config with custom parameters if specified
-        if "parameters" in self.model_cfg:
-            params = self.model_cfg.parameters
-            
-            # Update relevant config parameters
-            config_updates = {
-                "encoder_layers": params.get("encoder_layers"),
-                "decoder_layers": params.get("decoder_layers"),
-                "encoder_attention_heads": params.get("encoder_attention_heads"),
-                "decoder_attention_heads": params.get("decoder_attention_heads"),
-                "encoder_ffn_dim": params.get("encoder_ffn_dim"),
-                "decoder_ffn_dim": params.get("decoder_ffn_dim"),
-                "d_model": params.get("d_model"),
-            }
-            
-            for key, value in config_updates.items():
-                if value is not None:
-                    setattr(config, key, value)
-                    ic(f"Updated config.{key} = {value}")
-        
-        # Load the model
-        self.model = BartForConditionalGeneration.from_pretrained(
-            model_name,
-            config=config
+        """Initializes the BART model."""
+        model_obj = BartForConditionalGeneration.from_pretrained(
+            self.model_cfg.model_name_or_path
         )
+       
+        # This logic correctly handles the two possible return types of from_pretrained
+        if isinstance(model_obj, tuple):
+            self.model = model_obj[0]
+        else:
+            self.model = model_obj
         
-        # Configure model for training/inference
-        training_mode = self.model_cfg.get("training_mode", {})
-        
-        # Gradient checkpointing
-        if training_mode.get("gradient_checkpointing", False):
+        # This assertion informs Pylance that the model is now valid
+        assert self.model is not None, "Model failed to load from pretrained."
+        if self.model_cfg.get("training_mode", {}).get("gradient_checkpointing", False):
             self.model.gradient_checkpointing_enable()
             ic("Gradient checkpointing enabled")
-        
-        # Cache usage
-        self.model.config.use_cache = training_mode.get("use_cache", False)
-        
-        # Model compilation (PyTorch 2.0+)
-        compile_cfg = self.model_cfg.get("compile", {})
-        if compile_cfg.get("enabled", False):
-            try:
-                self.model = torch.compile(
-                    self.model,
-                    mode=compile_cfg.get("mode", "default"),
-                    dynamic=compile_cfg.get("dynamic", False)
-                )
-                ic("Model compiled successfully")
-            except Exception as e:
-                logger.warning(f"Model compilation failed: {e}")
+
+    def forward(self, **kwargs: torch.Tensor) -> Any:
+        """Forward pass through the model."""
+        assert self.model is not None, "Model has not been initialized."
+        return self.model(**kwargs)
+
+    def get_parameter_count(self) -> Dict[str, int]:
+        """Gets a detailed count of model parameters."""
+        if not self.model: return {"total": 0, "trainable": 0}
+        total = sum(p.numel() for p in self.model.parameters())
+        trainable = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        return {"total": total, "trainable": trainable}
     
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        decoder_input_ids: Optional[torch.Tensor] = None,
-        decoder_attention_mask: Optional[torch.Tensor] = None,
-        labels: Optional[torch.Tensor] = None,
-        **kwargs
-    ) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass through KoBART model.
+    def validation_step(self, batch, batch_idx):
+        """Validation step with sample logging."""
+        # Call parent validation step
+        outputs = super().validation_step(batch, batch_idx)
         
-        Args:
-            input_ids: Encoder input token IDs [batch_size, seq_len]
-            attention_mask: Encoder attention mask [batch_size, seq_len]
-            decoder_input_ids: Decoder input token IDs [batch_size, target_len]
-            decoder_attention_mask: Decoder attention mask [batch_size, target_len]
-            labels: Target labels for loss computation [batch_size, target_len]
-            **kwargs: Additional arguments
-            
-        Returns:
-            Model outputs including loss and logits
-        """
-        return self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            decoder_input_ids=decoder_input_ids,
-            decoder_attention_mask=decoder_attention_mask,
-            labels=labels,
-            use_cache=self.model_cfg.get("inference_mode", {}).get("use_cache", True),
-            output_attentions=self.model_cfg.get("inference_mode", {}).get("output_attentions", False),
-            output_hidden_states=self.model_cfg.get("inference_mode", {}).get("output_hidden_states", False),
-            **kwargs
-        )
-    
-    def generate(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        **kwargs
-    ) -> torch.Tensor:
-        """
-        Generate summaries using KoBART.
-        
-        Args:
-            input_ids: Input token IDs
-            attention_mask: Attention mask
-            **kwargs: Additional generation arguments
-            
-        Returns:
-            Generated token IDs
-        """
-        # Set model to inference mode
-        inference_mode = self.model_cfg.get("inference_mode", {})
-        self.model.config.use_cache = inference_mode.get("use_cache", True)
-        
-        # Merge generation config with kwargs
-        gen_kwargs = {**self.generation_config, **kwargs}
-        
-        # Set special token IDs
-        gen_kwargs.update({
-            "pad_token_id": self.tokenizer.pad_token_id,
-            "bos_token_id": self.tokenizer.bos_token_id,
-            "eos_token_id": self.tokenizer.eos_token_id,
-        })
-        
-        with torch.no_grad():
-            outputs = self.model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                **gen_kwargs
-            )
+        # Log validation samples table (only for first batch of first validation)
+        if batch_idx == 0 and self.current_epoch == 0:
+            self._log_validation_samples(batch, outputs)
         
         return outputs
-    
-    def get_parameter_count(self) -> Dict[str, int]:
-        """Get detailed parameter count."""
-        if self.model is None:
-            return {"total": 0, "trainable": 0}
-        
-        total_params = sum(p.numel() for p in self.model.parameters())
-        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        
-        # Get component-wise breakdown
-        encoder_params = sum(p.numel() for p in self.model.model.encoder.parameters())
-        decoder_params = sum(p.numel() for p in self.model.model.decoder.parameters())
-        
-        return {
-            "total": total_params,
-            "trainable": trainable_params,
-            "encoder": encoder_params,
-            "decoder": decoder_params,
-            "embedding": sum(p.numel() for p in self.model.model.shared.parameters())
-        }
-    
-    def freeze_encoder(self) -> None:
-        """Freeze encoder parameters for fine-tuning."""
-        for param in self.model.model.encoder.parameters():
-            param.requires_grad = False
-        
-        ic("Encoder parameters frozen")
-    
-    def unfreeze_encoder(self) -> None:
-        """Unfreeze encoder parameters."""
-        for param in self.model.model.encoder.parameters():
-            param.requires_grad = True
-        
-        ic("Encoder parameters unfrozen")
-    
-    def freeze_decoder(self) -> None:
-        """Freeze decoder parameters for fine-tuning."""
-        for param in self.model.model.decoder.parameters():
-            param.requires_grad = False
-        
-        ic("Decoder parameters frozen")
-    
-    def unfreeze_decoder(self) -> None:
-        """Unfreeze decoder parameters."""
-        for param in self.model.model.decoder.parameters():
-            param.requires_grad = True
-        
-        ic("Decoder parameters unfrozen")
-    
-    def get_encoder_embeddings(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
-        """
-        Get encoder embeddings for analysis.
-        
-        Args:
-            input_ids: Input token IDs
-            attention_mask: Attention mask
+
+    def _log_validation_samples(self, batch, outputs, num_samples: int = 5):
+        """Log validation samples to WandB."""
+        try:
+            # Find WandB logger with proper typing
+            wandb_logger: Optional[WandbLogger] = None
             
-        Returns:
-            Encoder hidden states
-        """
-        with torch.no_grad():
-            encoder_outputs = self.model.model.encoder(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                output_hidden_states=True
+            if self.trainer and hasattr(self.trainer, 'loggers'):
+                for logger in self.trainer.loggers:
+                    if isinstance(logger, WandbLogger):
+                        wandb_logger = logger
+                        break
+            elif hasattr(self.trainer, 'logger') and isinstance(self.trainer.logger, WandbLogger):
+                wandb_logger = self.trainer.logger
+            
+            if not wandb_logger:
+                ic("WandB logger not found")
+                return
+
+            # Type-safe access to experiment
+            experiment: Optional["WandbRun"] = wandb_logger.experiment
+            if not experiment:
+                ic("WandB experiment not initialized")
+                return
+            
+            # ✅ FIX: Use self.tokenizer, which has been correctly updated
+            assert self.tokenizer is not None, "Tokenizer is None in _log_validation_samples"
+            ic(f"Found WandB logger: {type(wandb_logger)}")
+            
+            # Get predictions for the batch
+            input_ids = batch["input_ids"][:num_samples]
+            attention_mask = batch["attention_mask"][:num_samples]
+            
+            # Add an assertion to satisfy the type checker that the model is not None
+            assert self.model is not None, "Model is None in _log_validation_samples"            
+            
+            # Generate predictions
+            with torch.no_grad():
+                generated_ids = self.model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    **self.generation_config
+                )
+            
+            # Decode inputs, targets, and predictions
+            samples_data = []
+            for i in range(min(num_samples, len(input_ids))):
+                # Decode input
+                input_text = self.tokenizer.decode(
+                    input_ids[i], skip_special_tokens=True
+                )
+                
+                
+                # Decode target (handle -100 labels)
+                target_ids = batch["labels"][i]
+                target_ids = target_ids[target_ids != -100] 
+                target_text = self.tokenizer.decode(
+                    target_ids, skip_special_tokens=True
+                )
+                
+                # Decode prediction
+                pred_text = self.tokenizer.decode(
+                    generated_ids[i], skip_special_tokens=True
+                )
+                
+                # Calculate ROUGE scores for this sample
+                rouge_scores = self._calculate_sample_rouge(pred_text, target_text)
+                
+                samples_data.append([
+                    # ✅ FIX: Use the raw decoded strings, not the post-processed ones
+                    input_text[:200] + "..." if len(input_text) > 200 else input_text,
+                    target_text,
+                    pred_text,
+                    f"{rouge_scores.get('rouge1_f', 0.0):.4f}",
+                    f"{rouge_scores.get('rouge2_f', 0.0):.4f}",
+                    f"{rouge_scores.get('rougeL_f', 0.0):.4f}"
+                ])
+
+            # Create WandB table
+            table = wandb.Table(
+                columns=["Input", "Ground Truth", "Prediction", "ROUGE-1", "ROUGE-2", "ROUGE-L"],
+                data=samples_data
             )
-        
-        return encoder_outputs.last_hidden_state
-    
-    def compute_perplexity(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        labels: torch.Tensor
-    ) -> float:
-        """
-        Compute perplexity for generated text.
-        
-        Args:
-            input_ids: Input token IDs
-            attention_mask: Attention mask
-            labels: Target labels
+            # ✅ FIX: Log the table using the global `wandb.log` function
+            wandb.log({"validation_samples": table})
             
-        Returns:
-            Perplexity score
-        """
-        with torch.no_grad():
-            outputs = self.forward(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                labels=labels
+            # Log the table
+            wandb_logger.experiment.log({"validation_samples": table})
+            ic(f"✅ Logged {len(samples_data)} validation samples to WandB")
+                
+        except Exception as e:
+            ic(f"❌ Failed to log validation samples: {e}")
+            import traceback
+            ic(f"Full traceback: {traceback.format_exc()}")
+
+    def _calculate_sample_rouge(self, prediction: str, reference: str) -> Dict[str, Any]:
+        """Calculate ROUGE scores for a single sample."""
+        try:
+            # ✅ Import and use the new centralized function from metrics.py
+            from evaluation.metrics import calculate_rouge_scores
+            scores = calculate_rouge_scores(
+                predictions=[prediction],
+                references=[reference],
+                average=True
             )
-            
-            loss = outputs.loss
-            perplexity = torch.exp(loss)
-            
-        return perplexity.item()
+            assert isinstance(scores, dict)
+            return scores
+        except Exception as e:
+            ic(f"Failed to calculate ROUGE for validation sample: {e}")
+            return {"rouge1_f": 0.0, "rouge2_f": 0.0, "rougeL_f": 0.0}
     
-    def save_pretrained(self, save_directory: str) -> None:
-        """
-        Save model and tokenizer.
-        
-        Args:
-            save_directory: Directory to save model
-        """
-        ic(f"Saving model to: {save_directory}")
-        
-        self.model.save_pretrained(save_directory)
-        self.tokenizer.save_pretrained(save_directory)
-        
-        ic("Model and tokenizer saved successfully")
-    
-    @classmethod
-    def load_from_checkpoint(
-        cls,
-        checkpoint_path: str,
-        map_location: Optional[str] = None,
-        **kwargs
-    ) -> "KoBARTSummarizationModel":
-        """
-        Load model from Lightning checkpoint.
-        """
-        ic(f"Loading model from checkpoint: {checkpoint_path}")
-        
-        # The model's config (cfg) is loaded automatically from the 
-        # checkpoint's "hyper_parameters" section by the parent method.
-        model = super().load_from_checkpoint(
-            checkpoint_path,
-            map_location=map_location,
-            strict=False, # Use strict=False to ignore mismatched weights if vocab was resized
-            **kwargs
-        )
-        
-        ic("Model loaded from checkpoint successfully")
-        return model
+    def on_validation_epoch_start(self):
+        """Called at the start of validation epoch."""
+        ic(f"Validation epoch {self.current_epoch} starting")
+        super().on_validation_epoch_start()
 
-
-def create_kobart_model(cfg: DictConfig) -> KoBARTSummarizationModel:
-    """
-    Create KoBART model instance.
     
-    Args:
-        cfg: Complete configuration
+    def on_validation_epoch_end(self):
+        """Called at the end of validation epoch."""
+        ic(f"Validation epoch {self.current_epoch} ending")
         
-    Returns:
-        KoBART model instance
-    """
-    return KoBARTSummarizationModel(cfg)
-
-
-def load_pretrained_kobart(
-    model_path: str,
-    cfg: DictConfig,
-    device: Optional[str] = None
-) -> KoBARTSummarizationModel:
-    """
-    Load pretrained KoBART model.
-    
-    Args:
-        model_path: Path to pretrained model
-        cfg: Configuration
-        device: Device to load model on
+        # Add explicit type checks before accessing attributes
+        if hasattr(self, 'logger') and self.logger:
+            if isinstance(self.logger, list):
+                ic(f"Multiple loggers found: {len(self.logger)}")
+                for i, logger in enumerate(self.logger):
+                    ic(f"Logger {i}: {type(logger)}")
+                    if isinstance(logger, WandbLogger) and hasattr(logger, 'experiment'):
+                        ic(f"Logger {i} experiment type: {type(logger.experiment)}")
+            else:
+                ic(f"Single logger type: {type(self.logger)}")
+                if isinstance(self.logger, WandbLogger) and hasattr(self.logger, 'experiment'): 
+                    ic(f"Logger experiment type: {type(self.logger.experiment)}")
         
-    Returns:
-        Loaded model instance
-    """
-    # Update config with model path
-    cfg = cfg.copy()
-    cfg.model.model_name_or_path = model_path
-    cfg.model.tokenizer.name_or_path = model_path
-    
-    # Create model
-    model = create_kobart_model(cfg)
-    
-    # Move to device if specified
-    if device:
-        model = model.to(device)
-    
-    ic(f"Pretrained KoBART loaded from: {model_path}")
-    return model
+        super().on_validation_epoch_end()

@@ -1,0 +1,19 @@
+# FILE: configs/preprocessing/topic_aware.yaml
+# @package preprocessing
+# Preprocessing configuration for using topic tokens
+
+# Define a mapping from raw topics to custom tokens
+topic_map:
+  "음식 주문": "<음식>"
+  "취업 면접": "<직업>"
+  "길 안내": "<생활>"
+  "호텔 체크인": "<여행>"
+  # Add more mappings as needed, or use a single default token for others
+  
+# New special tokens to be added to the tokenizer
+additional_special_tokens:
+  - "<음식>"
+  - "<직업>"
+  - "<생활>"
+  - "<여행>"
+  - "<기타>"  # A token for all other topics

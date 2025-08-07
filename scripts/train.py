@@ -3,33 +3,103 @@
 Training script for dialogue summarization using Click CLI.
 Enhanced with comprehensive logging and experiment tracking.
 """
+# FILE: scripts/train.py
 
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import List, Optional
 
+# Third-Party Imports
 import click
 import pytorch_lightning as pl
 import torch
 from icecream import ic
-from pytorch_lightning.callbacks import (
-    EarlyStopping,
-    LearningRateMonitor,
-    ModelCheckpoint,
-    TQDMProgressBar,
-)
+from pytorch_lightning.callbacks import (EarlyStopping, LearningRateMonitor,
+                                         ModelCheckpoint, TQDMProgressBar)
 from pytorch_lightning.loggers import TensorBoardLogger
 
-# Add src to path
-sys.path.append(str(Path(__file__).parent.parent / "src"))
+# --- Configuration (Should be inside a main function) ---
+# Suppress informational messages from the transformers library
+from transformers import logging
+logging.set_verbosity_error()
 
+# --- Local Application Imports ---
+# Add project source to the Python path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from data.datamodule import DialogueDataModule
 from models.kobart_model import KoBARTSummarizationModel
 from utils.config_utils import ConfigManager
 from utils.logging_utils import ExperimentLogger, setup_logging
-from utils.wandb_utils import WandBManager, WandBMetricsCallback
+from utils.wandb_utils import WandBManager
 
+def setup_pytorch_optimizations(cfg):
+    """
+    Setup PyTorch optimizations from dedicated pytorch config.
+    
+    Args:
+        cfg: Complete configuration including pytorch section
+    """
+    if "pytorch" not in cfg:
+        ic("No pytorch config found, using defaults")
+        return
+    
+    pytorch_cfg = cfg.pytorch
+    ic(f"Applying PyTorch optimizations: {pytorch_cfg}")
+    
+    # 1. Setup Dynamo settings
+    if "dynamo" in pytorch_cfg:
+        dynamo_cfg = pytorch_cfg.dynamo
+
+        # Get the dynamo config object dynamically to avoid Pylance warnings
+        dynamo_config = getattr(torch._dynamo, 'config', None)
+        if dynamo_config is None:
+            ic("Could not access torch._dynamo.config. Skipping Dynamo settings.")
+            return
+
+        # Cache size limit
+        if "cache_size_limit" in dynamo_cfg:
+            cache_limit = dynamo_cfg.cache_size_limit
+            # ✅ FIX: Use the dynamically retrieved config object
+            dynamo_config.cache_size_limit = cache_limit
+            ic(f"✓ Set dynamo cache_size_limit: {cache_limit}")
+
+        # Error suppression
+        if dynamo_cfg.get("suppress_errors", False):
+            # ✅ FIX: Use the dynamically retrieved config object
+            dynamo_config.suppress_errors = True
+            ic("✓ Enabled dynamo error suppression")
+
+        # Verbose mode
+        if dynamo_cfg.get("verbose", False):
+            # ✅ FIX: Use the dynamically retrieved config object
+            dynamo_config.verbose = True
+            ic("✓ Enabled dynamo verbose mode")
+    
+    # 2. Setup compilation settings (stored for later use in model)
+    if "compile" in pytorch_cfg:
+        compile_cfg = pytorch_cfg.compile
+        ic(f"✓ Model compilation config loaded: enabled={compile_cfg.get('enabled', False)}")
+    
+    # 3. Setup performance settings
+    if "float32_matmul_precision" in pytorch_cfg:
+        precision = pytorch_cfg.float32_matmul_precision
+        torch.set_float32_matmul_precision(precision)
+        ic(f"✓ Set float32_matmul_precision: {precision}")
+    
+    # 4. Setup CUDNN settings
+    if pytorch_cfg.get("cudnn_benchmark", True):
+        torch.backends.cudnn.benchmark = True
+        ic("✓ Enabled CUDNN benchmark")
+    
+    if pytorch_cfg.get("cudnn_deterministic", False):
+        torch.backends.cudnn.deterministic = True
+        ic("✓ Enabled CUDNN deterministic mode")
+    
+    # 5. Memory management settings (stored for later use)
+    if "empty_cache_steps" in pytorch_cfg:
+        ic(f"✓ GPU cache clearing every {pytorch_cfg.empty_cache_steps} steps")
 
 class DialogueTrainer:
     """Main trainer class for dialogue summarization."""
@@ -43,84 +113,76 @@ class DialogueTrainer:
     
     def train(
         self,
-        config_name: str = "config",
-        config_path: Optional[str] = None,
+        config_name: str,
         overrides: Optional[List[str]] = None,
         resume_from: Optional[str] = None,
-        fast_dev_run: bool = False,
-        max_epochs: Optional[int] = None,
-        batch_size: Optional[int] = None,
-        learning_rate: Optional[float] = None
     ) -> str:
         """
         Train dialogue summarization model.
-        
-        Args:
-            config_name: Name of config file (without .yaml)
-            config_path: Custom path to config directory
-            overrides: List of config overrides
-            resume_from: Path to checkpoint to resume from
-            fast_dev_run: Run one batch for debugging
-            max_epochs: Override max epochs
-            batch_size: Override batch size
-            learning_rate: Override learning rate
-            
-        Returns:
-            Path to best model checkpoint
         """
         ic(f"Starting training with config: {config_name}")
         
-        # Set config directory if provided
-        if config_path:
-            self.config_manager = ConfigManager(config_path)
-        
-        # Build overrides from arguments
-        overrides = overrides or []
-        if fast_dev_run:
-            overrides.append("training.fast_dev_run=true")
-        if max_epochs is not None:
-            overrides.append(f"training.max_epochs={max_epochs}")
-        if batch_size is not None:
-            overrides.append(f"dataset.batch_size={batch_size}")
-        if learning_rate is not None:
-            overrides.append(f"training.optimizer.lr={learning_rate}")
-        
-        # Load configuration
+        # Load configuration using the provided name and overrides
         self.cfg = self.config_manager.load_config(
             config_name=config_name,
-            overrides=overrides
+            overrides=overrides or []
         )
-        
+        # # 2. ✨ MERGE USING YOUR EXISTING METHOD ✨
+        # if 'experiment' in self.cfg:
+        #     # Use the merge method from your ConfigManager instance
+        #     self.cfg = self.config_manager.merge_configs(self.cfg, self.cfg.experiment)
+            
+        #     # Clean up the now-redundant 'experiment' key
+        #     # del self.cfg['experiment']
+        # CRITICAL: Setup PyTorch optimizations BEFORE any model/training code
+        setup_pytorch_optimizations(self.cfg)    
+
         # Validate configuration
         self.config_manager.validate_config(self.cfg)
         
-        # Setup logging
+        # Setup logging, tracking, and directories
         setup_logging(self.cfg)
-        
-        # Setup experiment tracking
         self._setup_experiment_tracking()
-        
-        # Create output directories
         output_dir = self._create_output_directories()
         
-        # Setup data
         ic("Setting up data module...")
         datamodule = DialogueDataModule(self.cfg)
         
-        # Setup model
         ic("Setting up model...")
         model = KoBARTSummarizationModel(self.cfg)
-        
+
+        # Apply memory management if configured
+        if hasattr(self.cfg, 'pytorch') and 'empty_cache_steps' in self.cfg.pytorch:
+            self.empty_cache_steps = self.cfg.pytorch.empty_cache_steps
+        else:
+            self.empty_cache_steps = 10  # default
+
         # Ensure model is in training mode
         model.train()
         
-        # Log model info
+        # Log model info and setup trainer
         model_info = model.get_model_summary()
         ic(f"Model info: {model_info}")
-        
-        # Setup trainer
-        trainer = self._setup_trainer(output_dir, resume_from, fast_dev_run)
-        
+        trainer, checkpoint_callback = self._setup_trainer(output_dir, resume_from)
+
+        ic("=== Logger Debug Info ===")
+        if isinstance(trainer.logger, list):
+            for i, logger in enumerate(trainer.logger):
+                ic(f"Logger {i}: {type(logger).__name__}")
+                if hasattr(logger, 'experiment'):
+                    ic(f"  Experiment type: {type(logger.experiment).__name__}")
+        else:
+            ic(f"Single logger: {type(trainer.logger).__name__}")
+
+        # Debug config loading
+        ic("=== CONFIG DEBUG ===")
+        ic(f"Max epochs from config: {self.cfg.training.max_epochs}")
+        ic(f"Early stopping patience: {self.cfg.training.early_stopping.patience}")
+        ic(f"Early stopping min_delta: {self.cfg.training.early_stopping.min_delta}")
+        ic(f"Experiment config exists: {'experiment' in self.cfg}")
+        if 'experiment' in self.cfg:
+            ic(f"Experiment training config: {self.cfg.experiment.get('training', 'Not found')}")  
+      
         # Train model
         ic("Starting training...")
         trainer.fit(
@@ -129,42 +191,34 @@ class DialogueTrainer:
             ckpt_path=resume_from
         )
         # Log final evaluation
-        ic("Starting final evaluation on the best model...")
-        # Capture the results from the test run
-        test_results = trainer.test(
-            model=model,
-            dataloaders=datamodule.val_dataloader(), # Use the validation dataloader
-            ckpt_path="best"
-        )
+        best_model_path = "No checkpoint saved."
+        best_score = None
+        # Safely access the checkpoint callback's attributes
+        checkpoint_callback = trainer.checkpoint_callback
+        if isinstance(checkpoint_callback, ModelCheckpoint):
+            best_model_path = checkpoint_callback.best_model_path
+            best_score = checkpoint_callback.best_model_score
 
-        # DYNAMICALLY UPDATE THE RUN NAME
-        if self.wandb_manager and test_results:
-            # The result is a list of dictionaries, so we take the first one
-            final_metrics = test_results[0]
-            # Extract the final overall ROUGE F1-score
-            rouge_f_score = final_metrics.get("eval/rouge_f")
-            if rouge_f_score is not None:
-                ic(f"Updating WandB run name with final ROUGE score: {rouge_f_score:.4f}")
-                self.wandb_manager.update_run_name_with_submission_score(rouge_f_score)
-
-        # Get best model path
-        best_model_path = trainer.checkpoint_callback.best_model_path
+        # Update WandB run name with the final score
+        # if self.wandb_manager and best_score is not None:
+        #     rouge_f_score = best_score.item()
+        #     ic(f"Best validation ROUGE-F score: {rouge_f_score:.4f}")
+        #     self.wandb_manager.update_run_name_with_submission_score(rouge_f_score)
+        if self.wandb_manager and best_score is not None:
+            rouge_f_score = best_score.item()
+            ic(f"Best validation ROUGE-F score: {rouge_f_score:.4f}")
+            self.wandb_manager.finalize_run_name_with_score(rouge_f_score)
         ic(f"Training completed. Best model: {best_model_path}")
-        
-        # Log final results
-        if hasattr(model, "validation_metrics"):
-            self.experiment_logger.log_final_results(model.validation_metrics)
-        
-        # Cleanup
+
         if self.wandb_manager:
             self.wandb_manager.finish()
-        
+            
         return best_model_path
     
     def validate(
         self,
         config_name: str = "config",
-        checkpoint_path: str = None,
+        checkpoint_path: Optional[str] = None,
         config_path: Optional[str] = None,
         overrides: Optional[List[str]] = None
     ) -> dict:
@@ -222,10 +276,11 @@ class DialogueTrainer:
         results = trainer.validate(model, datamodule=datamodule)
         
         ic(f"Validation results: {results}")
-        return results[0] if results else {}
+        return dict(results[0]) if results else {}
     
     def _setup_experiment_tracking(self) -> None:
         """Setup experiment tracking with WandB."""
+        assert self.cfg is not None
         # Setup WandB if configured
         if "wandb" in self.cfg and not self.cfg.wandb.get("offline", False):
             self.wandb_manager = WandBManager(self.cfg)
@@ -246,6 +301,7 @@ class DialogueTrainer:
     
     def _create_output_directories(self) -> Path:
         """Create output directories."""
+        assert self.cfg is not None, "Configuration must be loaded before creating output directories"
         output_dir = Path(self.cfg.output_dir)
         
         # Create subdirectories
@@ -261,29 +317,25 @@ class DialogueTrainer:
         
         # Save configuration
         config_path = output_dir / "configs" / "config.yaml"
-        self.config_manager.save_config(self.cfg, config_path)
+        if self.cfg is not None:
+            self.config_manager.save_config(self.cfg, config_path)
         
         ic(f"Output directories created: {output_dir}")
         return output_dir
     
-    def _setup_trainer(
-        self,
-        output_dir: Path,
-        resume_from: Optional[str] = None,
-        fast_dev_run: bool = False
-    ) -> pl.Trainer:
-        """Setup PyTorch Lightning trainer."""
+    def _setup_trainer(self, output_dir: Path, resume_from: Optional[str] = None):
+        """Setup PyTorch Lightning trainer and return trainer and checkpoint callback."""
+        assert self.cfg is not None, "Configuration must be loaded before setting up trainer"
         training_cfg = self.cfg.training
         
         # Setup callbacks
         callbacks = []
         
-        # Model checkpointing
         checkpoint_callback = ModelCheckpoint(
             dirpath=output_dir / "models",
-            filename="best-{epoch:02d}-{val_rouge_f:.4f}",
-            monitor=training_cfg.monitor,
-            mode=training_cfg.mode,
+            filename="best-{epoch:02d}-val_rouge_f={val/rouge_f:.4f}",
+            monitor="val/rouge_f",
+            mode="max",
             save_top_k=training_cfg.save_top_k,
             save_last=True,
             verbose=True,
@@ -305,34 +357,23 @@ class DialogueTrainer:
         lr_monitor = LearningRateMonitor(logging_interval="step")
         callbacks.append(lr_monitor)
         
-        # Progress bar disabled to avoid hanging issues
-        # Uncomment the next two lines if you want to enable progress bar
-        # progress_bar = TQDMProgressBar()
-        # callbacks.append(progress_bar)
-        
-        # WandB callback
-        if self.wandb_manager:
-            wandb_callback = WandBMetricsCallback(self.wandb_manager)
-            callbacks.append(wandb_callback)
-        
-        # Setup loggers
+        # Setup loggers - FIXED VERSION
         loggers = []
         
-        # TensorBoard logger
+        # WandB logger FIRST (this makes it the primary logger)
+        if self.wandb_manager:
+            wandb_logger = self.wandb_manager.setup_wandb()
+            loggers.append(wandb_logger)
+            ic(f"✅ WandB logger added: {type(wandb_logger)}")
+        
+        # TensorBoard logger SECOND
         tb_logger = TensorBoardLogger(
             save_dir=output_dir / "logs",
             name="tensorboard",
             version=None
         )
         loggers.append(tb_logger)
-        
-        # WandB logger
-        if self.wandb_manager:
-            wandb_logger = self.wandb_manager.setup_wandb(
-                job_type="training",
-                tags=["training", "kobart"]
-            )
-            loggers.append(wandb_logger)
+        ic(f"✅ TensorBoard logger added: {type(tb_logger)}")
         
         # Create trainer
         trainer = pl.Trainer(
@@ -352,9 +393,9 @@ class DialogueTrainer:
             val_check_interval=training_cfg.val_check_interval,
             check_val_every_n_epoch=training_cfg.check_val_every_n_epoch,
             
-            # Logging
-            log_every_n_steps=training_cfg.log_every_n_steps,
-            logger=loggers,
+            # Logging - PASS THE LIST OF LOGGERS
+            log_every_n_steps=training_cfg.get('log_every_n_steps', 50),
+            logger=loggers,  # This should be the list, not just one logger
             
             # Callbacks
             callbacks=callbacks,
@@ -363,21 +404,27 @@ class DialogueTrainer:
             enable_progress_bar=True,
             
             # Debugging
-            fast_dev_run=fast_dev_run or training_cfg.fast_dev_run,
+            fast_dev_run=training_cfg.fast_dev_run,
             overfit_batches=training_cfg.overfit_batches,
             limit_train_batches=training_cfg.limit_train_batches,
             limit_val_batches=training_cfg.limit_val_batches,
             
             # Reproducibility
-            deterministic=training_cfg.deterministic,
-            benchmark=training_cfg.benchmark,
+            deterministic=training_cfg.get("deterministic", False),
+            benchmark=training_cfg.get("benchmark", True),
             
             # Profiler
-            profiler=training_cfg.profiler,
+            profiler=training_cfg.get("profiler", None),
         )
         
+        # Debug logger setup
+        ic(f"Trainer loggers: {len(trainer.loggers) if hasattr(trainer, 'loggers') else 'No loggers attr'}")
+        if hasattr(trainer, 'loggers'):
+            for i, logger in enumerate(trainer.loggers):
+                ic(f"Logger {i}: {type(logger).__name__}")
+        
         ic("Trainer setup complete")
-        return trainer
+        return trainer, checkpoint_callback
 
 
 @click.group()
@@ -385,32 +432,79 @@ def cli():
     """Dialogue Summarization Training CLI."""
     pass
 
-
 @cli.command()
-@click.option('--config-name', default='config', help='Configuration name')
-@click.option('--config-path', type=click.Path(), help='Custom config directory')
-@click.option('--resume-from', type=click.Path(), help='Checkpoint to resume from')
-@click.option('--fast-dev-run', is_flag=True, help='Run one batch for debugging')
-@click.option('--max-epochs', type=int, help='Override max epochs')
-@click.option('--batch-size', type=int, help='Override batch size')
-@click.option('--learning-rate', type=float, help='Override learning rate')
-@click.option('--override', 'overrides', multiple=True, help='Config overrides (key=value)')
-def train(config_name, config_path, resume_from, fast_dev_run, max_epochs, batch_size, learning_rate, overrides):
-    """Train dialogue summarization model."""
+@click.option('--config-name', default=None, help='Name of the main configuration file to use.')
+@click.option('--experiment', default=None, help='Name of an experiment to run (uses the centralized config).')
+@click.option('--resume-from', type=click.Path(exists=True), help='Checkpoint to resume from')
+@click.option('--override', 'overrides', multiple=True, help='Custom Hydra overrides (e.g., "training.max_epochs=5")')
+@click.option('--max-epochs', type=int, help='Override training.max_epochs')
+@click.option('--batch-size', type=int, help='Override dataset.batch_size')
+@click.option('--learning-rate', type=float, help='Override training.optimizer.lr')
+@click.option('--fast-dev-run', is_flag=True, help='Run a single batch for debugging')
+@click.argument('hydra_overrides', nargs=-1)
+def train(experiment, config_name, resume_from, overrides, max_epochs, batch_size, learning_rate, fast_dev_run, hydra_overrides):
+    """
+    Train the model using either a specific experiment or a legacy config file.
+    """
     trainer = DialogueTrainer()
+    # Merge Click options, --override, and Hydra-style CLI overrides
+    final_overrides = list(overrides) + list(hydra_overrides)
+
+    if max_epochs is not None:
+        final_overrides.append(f"training.max_epochs={max_epochs}")
+    if batch_size is not None:
+        final_overrides.append(f"dataset.batch_size={batch_size}")
+    if learning_rate is not None:
+        final_overrides.append(f"training.optimizer.lr={learning_rate}")
+    if fast_dev_run:
+        final_overrides.append("training.fast_dev_run=true")
+
+    # # Logic to handle both new and legacy workflows
+    # if experiment:
+    #     # 1. New, preferred workflow: Use an experiment.
+    #     config_to_load = 'config-baseline-centralized'
+    #     final_overrides.append(f"experiment={experiment}")
+    #     if config_name:
+    #         ic(f"Warning: --config-name '{config_name}' is ignored when --experiment is used.")
     
+    # elif config_name:
+    #     # 2. Legacy workflow: Use a specific config file.
+    #     config_to_load = config_name
+    
+    # else:
+    #     # 3. Default behavior: Run the baseline experiment.
+    #     config_to_load = 'config-baseline-centralized'
+    #     final_overrides.append("experiment=baseline")
+    #     ic("No config or experiment specified. Defaulting to the 'baseline' experiment.")
+    # Detect experiment from hydra_overrides if not set via --experiment
+    experiment_override = None
+    for item in hydra_overrides:
+        if item.startswith("+experiment="):
+            experiment_override = item.split("=", 1)[1]
+            break
+
+    if config_name:
+        config_to_load = config_name
+        # Don't append experiment twice if already in hydra_overrides
+        if experiment and not experiment_override:
+            final_overrides.append(f"+experiment={experiment}")
+    elif experiment or experiment_override:
+        config_to_load = "config-baseline-centralized"
+        # Don't append experiment twice if already in hydra_overrides
+        if experiment and not experiment_override:
+            final_overrides.append(f"+experiment={experiment}")
+    else:
+        raise ValueError("Must specify a config or experiment to run.")
+
+
     best_model_path = trainer.train(
-        config_name=config_name,
-        config_path=config_path,
-        overrides=list(overrides),
+        config_name=config_to_load,
+        overrides=final_overrides,
         resume_from=resume_from,
-        fast_dev_run=fast_dev_run,
-        max_epochs=max_epochs,
-        batch_size=batch_size,
-        learning_rate=learning_rate
     )
     
-    click.echo(f"Training complete. Best model: {best_model_path}")
+    click.echo(f"\nTraining complete. Best model saved to: {best_model_path}")
+    
 
 
 @cli.command()
@@ -439,12 +533,28 @@ def main():
     # Set environment variables for reproducibility
     os.environ["PYTHONHASHSEED"] = "0"
 
-    # ADD THIS LINE to optimize for Tensor Cores
-    torch.set_float32_matmul_precision('medium')    
+ 
 
     # Enable faster PyTorch operations
-    torch.backends.cudnn.benchmark = True
+    # torch.backends.cudnn.benchmark = False
     
+# --- Configuration (Should be inside a main function) ---
+# Suppress informational messages from the transformers library
+    from transformers import logging
+    logging.set_verbosity_error()
+
+    # === FIX START ===
+    # Add this section to fix cuDNN execution plan errors
+    try:
+        # ADD THIS LINE to optimize for Tensor Cores
+        torch.set_float32_matmul_precision('medium')   
+        # Disables cuDNN's auto-tuner, which can sometimes fail to find a valid plan.
+        torch.backends.cudnn.benchmark = True
+        # Enables deterministic algorithms, which can help with stability.
+        torch.backends.cudnn.deterministic = False
+    except Exception as e:
+        ic(f"Could not set cuDNN flags: {e}")
+    # === FIX END ===
     cli()
 
 

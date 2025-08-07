@@ -45,3 +45,7 @@ scikit-learn
 pyyaml
 tqdm
 pre-commit
+
+# Data visualization
+matplotlib
+seaborn==0.13.2

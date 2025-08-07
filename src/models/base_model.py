@@ -1,483 +1,293 @@
+# FILE: src/models/base_model.py
 """
 Base Lightning module for dialogue summarization models.
 Provides common functionality for training, validation, and testing.
 """
 
-import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple, Union
-
-import pytorch_lightning as pl
+from typing import Any, Dict, List, Optional, cast
 import torch
-import torch.nn.functional as F
+import pytorch_lightning as pl
+from pytorch_lightning.loggers import WandbLogger
+import wandb
 from icecream import ic
 from omegaconf import DictConfig
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
 from transformers import get_cosine_schedule_with_warmup
-from evaluation.metrics import RougeCalculator
-
-logger = logging.getLogger(__name__)
-
+from postprocessing.postprocessing import apply_post_processing
+from utils.config_utils import ConfigManager
+from evaluation.metrics import calculate_rouge_scores 
+import re  # ✅ FIX: Import the 're' module
 
 class BaseSummarizationModel(pl.LightningModule, ABC):
     """Base class for dialogue summarization models."""
-    
+
     def __init__(self, cfg: DictConfig):
-        """
-        Initialize base model.
-        
-        Args:
-            cfg: Complete configuration
-        """
         super().__init__()
         self.cfg = cfg
         self.model_cfg = cfg.model
         self.training_cfg = cfg.training
-        
-        # Save hyperparameters
         self.save_hyperparameters(cfg)
-        
-        # Model will be initialized by subclasses
-        self.model = None
-        self.tokenizer = None
-        
-        # Metrics storage
-        self.training_metrics = {}
-        self.validation_metrics = {}
-        
-        # Store validation outputs for epoch end processing (PyTorch Lightning v2.0+)
-        self.validation_step_outputs = []
-        self.test_step_outputs = []
 
-        # Generation config
+        # State Variables & Helpers
+        self.validation_step_outputs: List[Dict] = []
+        self.test_step_outputs: List[Dict] = []
+        self._logged_postprocessing_stages = set()
+        self.config_manager = ConfigManager()
+
+        # Core Components (to be initialized by subclass)
+        self.model: Optional[torch.nn.Module] = None
+        self.tokenizer: Optional[Any] = None
         self.generation_config = self._setup_generation_config()
-       
-        self.rouge_calculator = RougeCalculator()
-        ic(f"BaseSummarizationModel initialized")
-    
-    def clear_gpu_memory(self) -> None:
-        """Clear GPU memory cache."""
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-    
-    def get_gpu_memory_usage(self) -> Dict[str, float]:
-        """Get current GPU memory usage."""
-        if not torch.cuda.is_available():
-            return {"allocated": 0.0, "cached": 0.0, "total": 0.0}
-        
-        allocated = torch.cuda.memory_allocated() / 1024**3  # GB
-        cached = torch.cuda.memory_reserved() / 1024**3  # GB
-        total = torch.cuda.get_device_properties(0).total_memory / 1024**3  # GB
-        
-        return {
-            "allocated": allocated,
-            "cached": cached,
-            "total": total,
-            "free": total - allocated
-        }
-    
-    def log_gpu_memory(self, step_name: str = "") -> None:
-        """Log current GPU memory usage."""
-        if torch.cuda.is_available():
-            memory = self.get_gpu_memory_usage()
-            ic(f"{step_name} GPU Memory - Allocated: {memory['allocated']:.2f}GB, "
-               f"Cached: {memory['cached']:.2f}GB, Free: {memory['free']:.2f}GB")
-    
+        ic("BaseSummarizationModel initialized")
+
     @abstractmethod
     def _setup_model(self) -> None:
         """Setup the actual model. Must be implemented by subclasses."""
         pass
-    
+
     @abstractmethod
     def _setup_tokenizer(self) -> None:
         """Setup tokenizer. Must be implemented by subclasses."""
         pass
-    
-    def _setup_generation_config(self) -> Dict[str, Any]:
-        """Setup generation configuration."""
-        gen_cfg = self.training_cfg.get("generation", {})
+
+    def _calculate_metrics(self, predictions: list, targets: list) -> Dict[str, float]:
+        """Calculates averaged ROUGE scores for a batch of predictions and targets."""
         
-        return {
-            "max_length": gen_cfg.get("max_length", 50),
-            "min_length": gen_cfg.get("min_length", 1),
-            "num_beams": gen_cfg.get("num_beams", 4), # Change this from 1
-            "no_repeat_ngram_size": gen_cfg.get("no_repeat_ngram_size", 2),
-            "early_stopping": gen_cfg.get("early_stopping", True),
-            "do_sample": False,
-            "length_penalty": gen_cfg.get("length_penalty", 1.0),
-        }
-    
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        decoder_input_ids: Optional[torch.Tensor] = None,
-        decoder_attention_mask: Optional[torch.Tensor] = None,
-        labels: Optional[torch.Tensor] = None,
-        **kwargs
-    ) -> Dict[str, torch.Tensor]:
-        """
-        Forward pass through the model.
-        
-        Args:
-            input_ids: Input token IDs
-            attention_mask: Attention mask for input
-            decoder_input_ids: Decoder input token IDs
-            decoder_attention_mask: Attention mask for decoder
-            labels: Target labels for training
-            **kwargs: Additional arguments
-            
-        Returns:
-            Model outputs
-        """
-        return self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            decoder_input_ids=decoder_input_ids,
-            decoder_attention_mask=decoder_attention_mask,
-            labels=labels,
-            **kwargs
+        # This function is now simplified to always return an averaged dictionary.
+        rouge_scores = calculate_rouge_scores(
+            predictions=predictions,
+            references=targets,
+            average=True  # Always request the averaged result
         )
+        
+        # The `isinstance` check is no longer needed because the return type is guaranteed.
+        return cast(Dict[str, float], rouge_scores) # ✅ FIX: Use a type cast here to resolve Pylance error
     
+    def forward(self, **kwargs: torch.Tensor) -> Dict[str, torch.Tensor]: # ✅ FIX: Specify the return type
+        """Forward pass through the model."""
+        assert self.model is not None, "Model not initialized."
+        return cast(Dict[str, torch.Tensor], self.model(**kwargs)) # ✅ FIX: Use a type cast here to resolve Pylance error
+
     def training_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
-        """
-        Training step.
-        
-        Args:
-            batch: Batch of data
-            batch_idx: Batch index
-            
-        Returns:
-            Loss tensor
-        """
-        # Log memory before step
-        if batch_idx % 50 == 0:  # Log every 50 steps
-            self.log_gpu_memory(f"Training step {batch_idx} start")
-        
-        outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
-        loss = outputs.loss
-        
-        # Log metrics
+        """Performs a single training step."""
+        model_inputs = {k: v for k, v in batch.items() if k != "sample_ids"}
+        outputs = self.forward(**model_inputs)
+        loss = outputs["loss"]
         self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
-        
-        # Store metrics
-        self.training_metrics["loss"] = loss.item()
-        
-        # Clear GPU memory periodically
-        if batch_idx % 10 == 0:  # Clear every 10 steps
+
+        # Periodically clear GPU memory based on config
+        empty_cache_steps = self.cfg.pytorch.get("empty_cache_steps", 50)
+        if (self.global_step + 1) % empty_cache_steps == 0:
             self.clear_gpu_memory()
         
         return loss
-    
-    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, Any]:
-        """
-        Validation step.
-        
-        Args:
-            batch: Batch of data
-            batch_idx: Batch index
-            
-        Returns:
-            Dictionary with outputs
-        """
-        # Log memory before step
-        if batch_idx % 10 == 0:  # Log every 10 validation steps
-            self.log_gpu_memory(f"Validation step {batch_idx} start")
-        
-        # Forward pass for loss calculation
-        outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
-        loss = outputs.loss
-        
-        # Clear memory after forward pass
-        self.clear_gpu_memory()
-        
-        # Generate predictions for evaluation
-        predictions = self.generate(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"]
-        )
-        
-        # Clear memory after generation
-        self.clear_gpu_memory()
-        
-        # Decode predictions and targets
-        pred_texts = self._decode_predictions(predictions)
-        target_texts = self._decode_targets(batch["labels"])
-        
-        step_output = {
-            "loss": loss.detach(),
-            "predictions": pred_texts,
-            "targets": target_texts,
-            "sample_ids": batch["sample_ids"]
-        }
-        
-        # Store outputs for epoch end processing (PyTorch Lightning v2.0+)
-        self.validation_step_outputs.append(step_output)
-        
-        return step_output
-    
-    def on_validation_epoch_end(self) -> None:
-        """
-        Process validation epoch end.
-        """
-        outputs = self.validation_step_outputs
-        
-        if not outputs:
-            return
-        
-        # Calculate average loss
-        avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
-        
-        # Collect all predictions and targets
-        all_predictions = []
-        all_targets = []
-        
-        for output in outputs:
-            all_predictions.extend(output["predictions"])
-            all_targets.extend(output["targets"])
-        
-        # Use the centralized ROUGE calculator
-        rouge_scores = self.rouge_calculator.calculate_rouge(
-            predictions=all_predictions,
-            references=all_targets,
-            average=True
-        )
-        
-        # Log all ROUGE metrics to WandB and progress bar
-        self.log("val/loss", avg_loss, prog_bar=True)
-        self.log_dict(
-            {f"val/{k}": v for k, v in rouge_scores.items()},
-            sync_dist=True
-        )
-        
-        # Store validation metrics
-        self.validation_metrics = {
-            "loss": avg_loss.item(),
-            **rouge_scores
-        }
-        
-        ic(f"Validation metrics: {self.validation_metrics}")
-        
-        # Clear outputs for next epoch
-        self.validation_step_outputs.clear()
-        
-        # Clear GPU memory
-        self.clear_gpu_memory()
-        self.log_gpu_memory("Validation epoch end")
-    
-    def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, Any]:
-        """
-        Test step.
-        """
-        # Forward pass for loss calculation
-        outputs = self.forward(**{k: v for k, v in batch.items() if k != "sample_ids"})
-        loss = outputs.loss
-        
-        # Generate predictions for evaluation
-        predictions = self.generate(
-            input_ids=batch["input_ids"],
-            attention_mask=batch["attention_mask"]
-        )
-        
-        # Decode predictions and targets
-        pred_texts = self._decode_predictions(predictions)
-        target_texts = self._decode_targets(batch["labels"])
-        
-        step_output = {
-            "loss": loss.detach(),
-            "predictions": pred_texts,
-            "targets": target_texts,
-            "sample_ids": batch["sample_ids"]
-        }
-        
-        self.test_step_outputs.append(step_output)
-        return step_output
-    
-    def predict_step(self, batch: Dict[str, torch.Tensor], batch_idx: int) -> Dict[str, Any]:
-        """
-        Prediction step (same as test step).
-        
-        Args:
-            batch: Batch of data
-            batch_idx: Batch index
-            
-        Returns:
-            Dictionary with outputs
-        """
-        return self.test_step(batch, batch_idx)
-    
-    def generate(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-        **kwargs
-    ) -> torch.Tensor:
-        """
-        Generate text using the model.
-        
-        Args:
-            input_ids: Input token IDs
-            attention_mask: Attention mask
-            **kwargs: Additional generation arguments
-            
-        Returns:
-            Generated token IDs
-        """
-        # Merge generation config with kwargs
-        gen_kwargs = {**self.generation_config, **kwargs}
-        
-        # Set pad token if not specified
-        if "pad_token_id" not in gen_kwargs and hasattr(self.tokenizer, "pad_token_id"):
-            gen_kwargs["pad_token_id"] = self.tokenizer.pad_token_id
-        
-        with torch.no_grad():
-            outputs = self.model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                **gen_kwargs
-            )
-        
-        return outputs
-    
-    def _decode_predictions(self, predictions: torch.Tensor) -> List[str]:
-        """
-        Decode prediction token IDs to text.
-        
-        Args:
-            predictions: Generated token IDs
-            
-        Returns:
-            List of decoded text strings
-        """
-        decoded = []
-        for pred in predictions:
-            text = self.tokenizer.decode(
-                pred,
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=True
-            )
-            decoded.append(text.strip())
-        
-        return decoded
-    
-    def _decode_targets(self, labels: torch.Tensor) -> List[str]:
-        """
-        Decode target labels to text.
-        
-        Args:
-            labels: Target token IDs
-            
-        Returns:
-            List of decoded text strings
-        """
-        # Replace -100 with pad token for decoding
-        labels = labels.clone()
-        labels[labels == -100] = self.tokenizer.pad_token_id
-        
-        decoded = []
-        for label in labels:
-            text = self.tokenizer.decode(
-                label,
-                skip_special_tokens=True,
-                clean_up_tokenization_spaces=True
-            )
-            decoded.append(text.strip())
-        
-        return decoded
-    
 
-    def configure_optimizers(self) -> Dict[str, Any]:
-        """Configure optimizers and learning rate schedulers."""
-        # Setup optimizer
+    def validation_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
+        """Performs a single validation step."""
+        output = self._shared_eval_step(batch, "val")
+        self.validation_step_outputs.append(output)
+
+    def test_step(self, batch: Dict[str, torch.Tensor], batch_idx: int):
+        """Performs a single test step."""
+        output = self._shared_eval_step(batch, "test")
+        self.test_step_outputs.append(output)
+
+    def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> List[str]:
+        """Performs a single prediction step."""
+        assert self.tokenizer is not None and self.model is not None, "Components must be initialized"
+        generated_tokens = self.model.generate(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+            **self.generation_config
+        )
+        raw_preds = self.tokenizer.batch_decode(generated_tokens, skip_special_tokens=False)
+        predictions = [self._apply_post_processing(text, stage="inference") for text in raw_preds]
+        return predictions
+
+    def on_validation_epoch_end(self):
+        """Computes and logs metrics at the end of the validation epoch."""
+        self._on_eval_epoch_end(self.validation_step_outputs, stage="val")
+
+    def on_test_epoch_end(self):
+        """Computes and logs metrics at the end of the test epoch."""
+        self._on_eval_epoch_end(self.test_step_outputs, stage="test")
+
+    def configure_optimizers(self) -> Any:
+        """Configures the optimizer and learning rate scheduler."""
         optimizer_cfg = self.training_cfg.optimizer
+        optimizer = AdamW(
+            self.parameters(),
+            lr=optimizer_cfg.lr,
+            weight_decay=optimizer_cfg.weight_decay
+        )
         
-        if optimizer_cfg.name.lower() == "adamw":
-            optimizer = AdamW(
-                self.parameters(),
-                lr=optimizer_cfg.lr,
-                weight_decay=optimizer_cfg.weight_decay,
-                betas=optimizer_cfg.get("betas", [0.9, 0.999]),
-                eps=optimizer_cfg.get("eps", 1e-8)
-            )
-        else:
-            raise ValueError(f"Unsupported optimizer: {optimizer_cfg.name}")
-        
-        # Setup scheduler
         scheduler_cfg = self.training_cfg.lr_scheduler
+        total_steps = self.trainer.estimated_stepping_batches
+        warmup_steps = int(total_steps * scheduler_cfg.warmup_ratio)
         
-        if scheduler_cfg.name.lower() == "cosine":
-            # Calculate total steps for warmup
-            if hasattr(self.trainer, "estimated_stepping_batches"):
-                total_steps = self.trainer.estimated_stepping_batches
-            else:
-                # Fallback calculation
-                total_steps = self.training_cfg.max_epochs * 1000  # Rough estimate
-            
-            warmup_steps = int(total_steps * scheduler_cfg.warmup_ratio)
-            
-            scheduler = get_cosine_schedule_with_warmup(
-                optimizer=optimizer,
-                num_warmup_steps=warmup_steps,
-                num_training_steps=total_steps
-            )
-            
-            return {
-                "optimizer": optimizer,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "interval": "step",
-                    "frequency": 1,
-                }
-            }
-        else:
-            return {"optimizer": optimizer}
+        scheduler = get_cosine_schedule_with_warmup(
+            optimizer=optimizer,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=int(total_steps)
+        )
+        
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {"scheduler": scheduler, "interval": "step", "frequency": 1}
+        }
     
     def get_model_summary(self) -> Dict[str, Any]:
-        """Get model summary information."""
-        if self.model is None:
+        """Gets a summary of the model's parameters."""
+        if not self.model:
             return {"error": "Model not initialized"}
-        
+
         total_params = sum(p.numel() for p in self.model.parameters())
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        
+
         return {
             "total_parameters": total_params,
             "trainable_parameters": trainable_params,
             "trainable_ratio": trainable_params / total_params if total_params > 0 else 0,
             "model_size_mb": total_params * 4 / (1024 * 1024),  # Assuming fp32
         }
+    # ------------------------------------------------------------------------------------
+    # Helper Methods
+    # ------------------------------------------------------------------------------------
     
-    def on_test_epoch_end(self) -> None:
-        """
-        Process test epoch end.
-        """
-        outputs = self.test_step_outputs
+    def _shared_eval_step(self, batch: Dict[str, torch.Tensor], stage: str) -> Dict[str, Any]:
+        """Performs a single evaluation step for either validation or testing."""
+        assert self.tokenizer is not None and self.model is not None, "Components must be initialized"
         
+        model_inputs = {k: v for k, v in batch.items() if k != "sample_ids"}
+        loss = None
+        targets = []
+        
+        # Conditionally handle loss and targets if labels exist
+        if "labels" in batch:
+            outputs = self.forward(**model_inputs)
+            loss = outputs["loss"]
+            self.log(f"{stage}/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+            
+            labels = batch["labels"]
+            labels[labels == -100] = self.tokenizer.pad_token_id
+            raw_targets = self.tokenizer.batch_decode(labels, skip_special_tokens=False)
+            # targets = [self._apply_post_processing(text, stage=stage) for text in raw_targets]
+            # ✅ FIX: Apply simple cleaning, but DO NOT apply post-processing (including reverse swap)
+            # We want to log the names as seen by the model, not revert them.
+            targets = [self._clean_only_post_processing(text) for text in raw_targets]
+        # Generate predictions
+        generated_tokens = self.model.generate(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+            **self.generation_config
+        )
+        raw_preds = self.tokenizer.batch_decode(generated_tokens, skip_special_tokens=False)
+        
+        # ✅ FIX: Apply full post-processing ONLY to the model's predictions
+        predictions = [self._apply_post_processing(text, stage=stage) for text in raw_preds]
+        
+        # Decode inputs for logging purposes
+        raw_inputs = self.tokenizer.batch_decode(batch["input_ids"], skip_special_tokens=False)
+        # inputs = [self._apply_post_processing(text, stage=stage) for text in raw_inputs]
+        # ✅ FIX: Apply simple cleaning, but DO NOT apply post-processing (including reverse swap)
+        inputs = [self._clean_only_post_processing(text) for text in raw_inputs]
+        return {"loss": loss, "predictions": predictions, "targets": targets, "inputs": inputs}
+
+    # ✅ NEW: Add a new helper function for basic cleaning without the full pipeline
+    def _clean_only_post_processing(self, text: str) -> str:
+        """Applies minimal post-processing for logging purposes (removes special tokens only)."""
+        post_cfg = self.cfg.get("postprocessing", {})
+        remove_tokens = post_cfg.get("remove_tokens", [])
+        
+        for token in remove_tokens:
+            text = text.replace(token, "")
+        
+        # Also clean up extra spaces
+        text = text.strip()
+        text = re.sub(r'\s+', ' ', text)
+        
+        return text
+    
+    def _on_eval_epoch_end(self, outputs: List[Dict], stage: str):
+        """Centralized logic for processing epoch-end outputs."""
         if not outputs:
             return
 
-        avg_loss = torch.stack([x["loss"] for x in outputs]).mean()
+        all_predictions = [p for out in outputs for p in out["predictions"]]
+        all_targets = [t for out in outputs for t in out["targets"]]
+        all_inputs = [i for out in outputs for i in out["inputs"]]
+
         
-        all_predictions = []
-        all_targets = []
-        for output in outputs:
-            all_predictions.extend(output["predictions"])
-            all_targets.extend(output["targets"])
+        if all_targets:
+            rouge_scores = self._calculate_metrics(all_predictions, all_targets)
+            
+            # Filter for scalar metrics before logging
+            scalar_rouge_scores = {k: v for k, v in rouge_scores.items() if not isinstance(v, list)}
+            self.log_dict({f"{stage}/{k}": v for k, v in scalar_rouge_scores.items()})
+
+        if stage == "val":
+            self._log_wandb_validation_table(all_inputs, all_targets, all_predictions)
         
-        rouge_scores = self.rouge_calculator.calculate_rouge(
-            predictions=all_predictions,
-            references=all_targets,
-            average=True
-        )
+        outputs.clear()
+        self.clear_gpu_memory()
+
+
+    def _log_wandb_validation_table(self, inputs: List[str], targets: List[str], predictions: List[str]):
+        """Logs a sample of predictions and metrics to a wandb.Table."""
+        # Ensure we have a WandbLogger and the experiment is running
+        if not isinstance(self.logger, WandbLogger) or not self.logger.experiment:
+            return
+
+        try:
+            table = wandb.Table(columns=["Epoch", "Input", "Ground Truth", "Prediction", "ROUGE-1", "ROUGE-2", "ROUGE-L"])
+            for i in range(min(len(predictions), 5)):
+                # Calculate ROUGE scores for each individual sample
+                sample_rouge = self._calculate_metrics(
+                    predictions=[predictions[i]],
+                    targets=[targets[i]],
         
-         # Log all ROUGE metrics with an "eval_" prefix
-        self.log("eval/loss", avg_loss)
-        self.log_dict(
-            {f"eval/{k}": v for k, v in rouge_scores.items()},
-            sync_dist=True
-        )
+            )
+    
+            
+                table.add_data(
+                    self.current_epoch,
+                    inputs[i],
+                    targets[i],
+                    predictions[i],
+                    f"{sample_rouge.get('rouge1_f', 0.0):.4f}",
+                    f"{sample_rouge.get('rouge2_f', 0.0):.4f}",
+                    f"{sample_rouge.get('rougeL_f', 0.0):.4f}"
+                )
+            
+            # Use the PyTorch Lightning logger to correctly log the table
+            self.logger.experiment.log({"validation_samples": table})
+
+        except Exception as e:
+            ic(f"WandB table logging failed: {e}")
+
+    def _setup_generation_config(self) -> Dict[str, Any]:
+        """Creates the generation config dictionary from the main config."""
+        # Use self.cfg.generation as it's a top-level key
+        gen_cfg = self.cfg.get("generation", {})
+        return {
+            "max_length": gen_cfg.get("max_length", 50),
+            "min_length": gen_cfg.get("min_length", 10),
+            "num_beams": gen_cfg.get("num_beams", 4),
+            "repetition_penalty": gen_cfg.get("repetition_penalty", 1.5),
+            "length_penalty": gen_cfg.get("length_penalty", 0.8),
+            "no_repeat_ngram_size": gen_cfg.get("no_repeat_ngram_size", 3),
+            "early_stopping": gen_cfg.get("early_stopping", True)
+        }
+    
+    def _apply_post_processing(self, text: str, stage: str) -> str:
+        """Applies all post-processing steps from the config."""
+        post_cfg = self.cfg.get("postprocessing", {})
         
-        ic(f"Final Evaluation metrics: {rouge_scores}")
-        self.test_step_outputs.clear()   
+        # ✅ Call the single, centralized function
+        return apply_post_processing(text, post_cfg)
+    
+    def clear_gpu_memory(self):
+        """Clears GPU cache."""
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()

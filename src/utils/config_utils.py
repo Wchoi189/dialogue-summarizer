@@ -33,7 +33,30 @@ class ConfigManager:
         """
         self.config_dir = Path(config_dir) if config_dir else self._get_default_config_dir()
         self._hydra_initialized = False
-    
+
+    def load_postprocessing_config(self, config_name: str) -> DictConfig:
+        """
+        Load a specific post-processing configuration.
+        
+        Args:
+            config_name: Name of the post-processing config (e.g., 'validation', 'default')
+            
+        Returns:
+            Post-processing configuration
+        """
+        config_path = self.config_dir / "postprocessing" / f"{config_name}.yaml"
+        
+        if not config_path.exists():
+            raise FileNotFoundError(f"Post-processing config not found: {config_path}")
+        
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        
+        # Remove the @package directive if present
+        if '@package' in config:
+            config.pop('@package')
+        return DictConfig(config)
+
     def _get_default_config_dir(self) -> Path:
         """Get default configuration directory."""
         # Assume we're running from project root or scripts/
@@ -170,12 +193,12 @@ class ConfigManager:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         if resolve:
-            cfg = OmegaConf.to_yaml(cfg, resolve=True)
+            yaml_content = OmegaConf.to_yaml(cfg, resolve=True)
         else:
-            cfg = OmegaConf.to_yaml(cfg)
+            yaml_content = OmegaConf.to_yaml(cfg)
         
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write(cfg)
+            f.write(yaml_content)
         
         logger.info(f"Configuration saved to: {output_path}")
     
@@ -183,7 +206,7 @@ class ConfigManager:
         self, 
         base_cfg: DictConfig, 
         override_cfg: DictConfig
-    ) -> DictConfig:
+        ) -> DictConfig:
         """
         Merge two configurations with override taking precedence.
         
@@ -194,24 +217,21 @@ class ConfigManager:
         Returns:
             Merged configuration
         """
-        return OmegaConf.merge(base_cfg, override_cfg)
+        merged = OmegaConf.merge(base_cfg, override_cfg)
+        return DictConfig(merged)
+    
+    
     
     def get_config_summary(self, cfg: DictConfig) -> Dict[str, Any]:
         """
         Get a summary of key configuration parameters.
-        
-        Args:
-            cfg: Configuration to summarize
-            
-        Returns:
-            Dictionary with key parameters
         """
         summary = {
             "model_name": cfg.get("model", {}).get("name", "unknown"),
             "dataset_path": cfg.get("dataset", {}).get("data_path", "unknown"),
             "batch_size": cfg.get("training", {}).get("batch_size", "unknown"),
-            "learning_rate": cfg.get("training", {}).get("learning_rate", "unknown"),
-            "num_epochs": cfg.get("training", {}).get("num_epochs", "unknown"),
+            "learning_rate": cfg.get("training", {}).get("optimizer", {}).get("lr", "unknown"),
+            "max_epochs": cfg.get("training", {}).get("max_epochs", "unknown"),
         }
         
         return summary
@@ -262,3 +282,4 @@ def create_output_dir(cfg: DictConfig) -> Path:
     logger.info(f"Output directory created: {output_dir}")
     
     return output_dir
+

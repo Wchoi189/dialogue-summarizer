@@ -1,0 +1,85 @@
+# configs/experiment/context_aware_korean.yaml
+# @package _global_
+# Korean context-aware summarization
+
+experiment_name: "context_aware_korean"
+
+# =============================================================================
+# GENERATION - OPTIMIZED FOR KOREAN CONTEXT
+# =============================================================================
+generation:
+  max_length: 85     # ✅ Slightly longer for Korean complexity
+  min_length: 18     # ✅ Higher minimum for complete sentences
+  num_beams: 8       # ✅ More beam search for better choices
+  repetition_penalty: 1.4  # ✅ Less aggressive to preserve Korean patterns
+  length_penalty: 0.9      # ✅ Encourage completeness
+  diversity_penalty: 0.1   # ✅ Encourage vocabulary diversity
+  early_stopping: true
+  do_sample: false
+  no_repeat_ngram_size: 4  # ✅ Larger n-gram for Korean
+
+# =============================================================================
+# TRAINING - KOREAN-OPTIMIZED
+# =============================================================================  
+training:
+  max_epochs: 15
+  optimizer:
+    lr: 2.5e-5    # ✅ Balanced learning rate
+    weight_decay: 0.015
+    betas: [0.9, 0.98]  # ✅ Better for Korean text
+  lr_scheduler:
+    warmup_ratio: 0.15  # ✅ Longer warmup for stability
+  early_stopping:
+    patience: 6
+    min_delta: 0.005
+  gradient_clip_val: 0.5  # ✅ Smaller clipping for stability
+
+# =============================================================================
+# DATASET - OPTIMIZED BATCH SIZES
+# =============================================================================
+dataset:
+  batch_size: 24        # ✅ Balance between speed and memory
+  eval_batch_size: 12   # ✅ Smaller for thorough evaluation
+
+# =============================================================================
+# NO TOKEN SWAPPING BUT ENHANCED PREPROCESSING
+# =============================================================================
+preprocessing:
+  strategy: "std"
+  max_input_length: 512
+  max_target_length: 130  # ✅ Even longer for Korean summaries
+  truncation: true
+  padding: false
+  normalize_whitespace: true
+  remove_extra_newlines: true
+  token_swapping:
+    enable: false
+
+# =============================================================================
+# ENHANCED POSTPROCESSING FOR KOREAN
+# =============================================================================
+postprocessing:
+  token_swapping:
+    enable: false
+  remove_tokens:
+    - "<usr>"
+    - "<s>"  
+    - "</s>"
+    - "<pad>"
+    - "<unk>"
+  text_cleaning:
+    strip_whitespace: true
+    normalize_whitespace: true
+    remove_empty_lines: true
+  korean_specific:
+    remove_special_markers: false
+    normalize_punctuation: true
+  advanced:
+    remove_repetitive_phrases: true
+    fix_incomplete_sentences: true
+    min_length: 15  # ✅ Higher minimum for Korean completeness
+    max_length: 150 # ✅ Prevent overly long summaries
+
+wandb:
+  tags: ["korean_context", "optimized", "final_push"]
+  notes: "Korean-optimized settings for better context understanding"

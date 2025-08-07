@@ -44,9 +44,12 @@ def test_inference():
                 "generation": {
                     "max_length": 100,
                     "num_beams": 4
-                },
-                "post_processing": {
-                    "remove_tokens": ["<s>", "</s>"],
+                }
+                # ✅ Remove old post_processing from here - now handled by dedicated config
+            },
+            "postprocessing": {  # ✅ Add new postprocessing config for testing
+                "remove_tokens": ["<s>", "</s>"],
+                "text_cleaning": {
                     "strip_whitespace": True
                 }
             },

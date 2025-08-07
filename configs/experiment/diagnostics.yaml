@@ -1,0 +1,39 @@
+# =============================================================================
+# configs/experiment/diagnostics.yaml
+# =============================================================================
+# @package _global_
+# diagnostics experiment with optimal settings
+# Overrides for the 'diagnostics' experiment
+
+# Override training settings directly at root level
+training:
+  max_epochs: 15  # This should override the base config
+  optimizer:
+    lr: 5e-5  # 📈 Increased learning rate for better convergence
+  early_stopping:
+    enabled: true
+    monitor: "val/rouge_f"
+    patience: 5  # Increased patience
+    mode: "max"
+    min_delta: 0.001  # Smaller threshold
+    verbose: true
+
+# Override dataset settings
+dataset:
+  batch_size: 16  # ⚠️ Lower batch size for more stable updates
+  eval_batch_size: 64
+  num_workers: 16
+
+# Override generation settings
+generation:
+  max_length: 120  # 📏 Increased for longer Korean summaries
+  min_length: 8
+  num_beams: 5
+  repetition_penalty: 1.5
+  no_repeat_ngram_size: 3
+  length_penalty: 0.7
+
+# WandB settings
+wandb:
+  tags: ["diagnostics", "final", "optimized", "15epochs"]
+  notes: "diagnostics settings for final model with 15 epochs"

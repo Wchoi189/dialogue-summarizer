@@ -5,21 +5,21 @@ Handles model loading, prediction generation, and output processing.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
-
+from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 import pandas as pd
 import torch
 from icecream import ic
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-
+from postprocessing.postprocessing import apply_post_processing
 from data.dataset import InferenceDataset, create_collate_fn
 from data.preprocessing import create_preprocessor
 from models.base_model import BaseSummarizationModel
 
 logger = logging.getLogger(__name__)
-
+if TYPE_CHECKING:
+    from wandb.sdk.wandb_run import Run as WandbRun
 
 class DialoguePredictor:
     """Predictor for dialogue summarization inference."""
@@ -40,7 +40,7 @@ class DialoguePredictor:
         """
         self.model = model
         self.cfg = cfg
-        self.inference_cfg = cfg.inference
+       
         
         # Setup device
         if device is None:
@@ -63,9 +63,21 @@ class DialoguePredictor:
         
         ic(f"DialoguePredictor initialized on {self.device}")
     
-    def _setup_generation_config(self) -> Dict[str, any]:
+    def _post_process_output(self, text: str) -> str:
+        """Post-process generated text using the centralized cleaner."""
+        post_cfg = self.cfg.get("postprocessing", {})
+        
+        # ✅ Call the single, centralized function
+        return apply_post_processing(text, post_cfg)
+
+    def _setup_generation_config(self) -> Dict[str, Any]:
         """Setup generation configuration from inference config."""
-        gen_cfg = self.inference_cfg.generation
+        
+        # BEFORE (modular config, phase specific)
+        # gen_cfg = self.inference_cfg.generation
+        
+        # AFTER (centralized config + experiment overrides)
+        gen_cfg = self.cfg.generation
         
         config = {
             "max_length": gen_cfg.get("max_length", 100),
@@ -112,9 +124,11 @@ class DialoguePredictor:
         input_ids = torch.tensor(inputs["input_ids"]).unsqueeze(0).to(self.device)
         attention_mask = torch.tensor(inputs["attention_mask"]).unsqueeze(0).to(self.device)
         
+        # Add an assertion to satisfy the type checker
+        assert self.model is not None and self.model.model is not None, "Model or its internal model is not initialized."
         # Generate
         with torch.no_grad():
-            outputs = self.model.generate(
+            outputs = self.model.model.generate(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 **self.generation_config
@@ -122,9 +136,13 @@ class DialoguePredictor:
         
         # Decode output
         generated_ids = outputs[0] if len(outputs.shape) > 1 else outputs
+        
+        # Get the setting from the config, defaulting to False for safety
+        skip_tokens = self.cfg.postprocessing.get("skip_special_tokens", False)
+
         summary = self.preprocessor.decode_outputs(
             generated_ids.cpu().tolist(),
-            skip_special_tokens=True
+            skip_special_tokens=skip_tokens  # Use the variable from the config
         )
         
         # Post-process
@@ -150,7 +168,14 @@ class DialoguePredictor:
             List of generated summaries
         """
         if batch_size is None:
-            batch_size = self.inference_cfg.batch_size
+             # BEFORE: (modular config, phase specific)
+            # batch_size = self.inference_cfg.batch_size
+            
+            # AFTER (✅ Change this line):
+            batch_size = self.cfg.dataset.eval_batch_size        
+        # Ensure batch_size is not None
+        if batch_size is None:
+            batch_size = 1
         
         summaries = []
         
@@ -176,34 +201,27 @@ class DialoguePredictor:
             summaries=None,
             is_inference=True
         )
-        
-        # Convert to tensors
-        input_ids = torch.nn.utils.rnn.pad_sequence(
-            [torch.tensor(ids) for ids in batch_inputs["input_ids"]],
-            batch_first=True,
-            padding_value=self.preprocessor.tokenizer.pad_token_id
-        ).to(self.device)
-        
-        attention_mask = torch.nn.utils.rnn.pad_sequence(
-            [torch.tensor(mask) for mask in batch_inputs["attention_mask"]],
-            batch_first=True,
-            padding_value=0
-        ).to(self.device)
-        
+        # Add an assertion to satisfy the type checker
+        assert self.model is not None and self.model.model is not None, "Model or its internal model is not initialized."   
+        # Use torch.as_tensor() to make the type clear to the linter
+        input_ids = torch.as_tensor(batch_inputs["input_ids"]).to(self.device)
+        attention_mask = torch.as_tensor(batch_inputs["attention_mask"]).to(self.device)
         # Generate
         with torch.no_grad():
-            outputs = self.model.generate(
+            outputs = self.model.model.generate(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 **self.generation_config
             )
-        
+        # Get the setting from the config, defaulting to False for safety
+        skip_tokens = self.cfg.postprocessing.get("skip_special_tokens", True)
+
         # Decode outputs
         summaries = []
         for output in outputs:
             summary = self.preprocessor.decode_outputs(
                 output.cpu().tolist(),
-                skip_special_tokens=True
+                skip_special_tokens=skip_tokens
             )
             summary = self._post_process_output(summary)
             summaries.append(summary)
@@ -276,36 +294,7 @@ class DialoguePredictor:
         file_manager.save_csv(predictions_df, output_path)
         ic(f"Saved predictions to {output_file}")
     
-    def _post_process_output(self, text: str) -> str:
-        """
-        Post-process generated text.
-        
-        Args:
-            text: Generated text
-            
-        Returns:
-            Post-processed text
-        """
-        post_cfg = self.inference_cfg.get("post_processing", {})
-        
-        # Remove unwanted tokens
-        remove_tokens = post_cfg.get("remove_tokens", [])
-        for token in remove_tokens:
-            text = text.replace(token, "")
-        
-        # Clean whitespace
-        if post_cfg.get("strip_whitespace", True):
-            text = text.strip()
-        
-        if post_cfg.get("normalize_whitespace", True):
-            import re
-            text = re.sub(r'\s+', ' ', text)
-        
-        if post_cfg.get("remove_empty_lines", True):
-            lines = [line.strip() for line in text.split('\n') if line.strip()]
-            text = ' '.join(lines)
-        
-        return text
+  
     
     def create_dataloader(self, df: pd.DataFrame) -> DataLoader:
         """
@@ -333,10 +322,18 @@ class DialoguePredictor:
         # Create DataLoader
         dataloader = DataLoader(
             dataset=dataset,
-            batch_size=self.inference_cfg.batch_size,
+            
+            # BEFORE (modular config, phase specific)
+            # batch_size=self.inference_cfg.batch_size,
+            # shuffle=False,
+            # num_workers=self.inference_cfg.get("num_workers", 4),
+            # pin_memory=self.inference_cfg.get("pin_memory", True),
+            
+            #  Point to the centralized dataset settings
+            batch_size=self.cfg.dataset.eval_batch_size,
             shuffle=False,
-            num_workers=self.inference_cfg.get("num_workers", 4),
-            pin_memory=self.inference_cfg.get("pin_memory", True),
+            num_workers=self.cfg.dataset.num_workers,
+            pin_memory=self.cfg.dataset.pin_memory,
             collate_fn=collate_fn
         )
         
@@ -355,6 +352,8 @@ class DialoguePredictor:
         all_predictions = []
         all_sample_ids = []
         
+        # Get the setting from the config, defaulting to False for safety
+        skip_tokens = self.cfg.postprocessing.get("skip_special_tokens", True)
         with torch.no_grad():
             for batch in tqdm(dataloader, desc="Inference"):
                 # Move batch to device
@@ -362,8 +361,10 @@ class DialoguePredictor:
                 attention_mask = batch["attention_mask"].to(self.device)
                 sample_ids = batch["sample_ids"]
                 
+                # Add an assertion to satisfy the type checker
+                assert self.model is not None and self.model.model is not None, "Model or its internal model is not initialized."
                 # Generate
-                outputs = self.model.generate(
+                outputs = self.model.model.generate(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     **self.generation_config
@@ -373,7 +374,7 @@ class DialoguePredictor:
                 for i, output in enumerate(outputs):
                     summary = self.preprocessor.decode_outputs(
                         output.cpu().tolist(),
-                        skip_special_tokens=True
+                        skip_special_tokens=skip_tokens
                     )
                     summary = self._post_process_output(summary)
                     
@@ -389,31 +390,24 @@ class DialoguePredictor:
         return result_df
 
 
-def create_predictor(
-    model_path: str,
-    cfg: DictConfig,
-    device: Optional[str] = None
-) -> DialoguePredictor:
-    """
-    Create predictor from model checkpoint.
-    
-    Args:
-        model_path: Path to model checkpoint
-        cfg: Configuration
-        device: Device to use
+     # ✅ ADD THE @classmethod DECORATOR AND CHANGE THE FIRST ARGUMENT TO `cls`
+    @classmethod
+    def create_predictor(
+        cls,  # The first argument is now the class itself
+        model_path: str,
+        cfg: DictConfig,
+        device: Optional[str] = None
+    ) -> "DialoguePredictor": # Use quotes for forward reference to the class
+        """
+        Create predictor from model checkpoint.
+        """
+        from models.kobart_model import KoBARTSummarizationModel
         
-    Returns:
-        Predictor instance
-    """
-    from models.kobart_model import KoBARTSummarizationModel
-    
-    # Load model from checkpoint
-    model = KoBARTSummarizationModel.load_from_checkpoint(
-        model_path,
-        cfg=cfg
-    )
-    
-    # Create predictor
-    predictor = DialoguePredictor(model, cfg, device)
-    
-    return predictor
+        model = KoBARTSummarizationModel.load_from_checkpoint(
+            model_path
+        )
+        
+        # ✅ Use `cls` to create the new instance
+        predictor = cls(model, cfg, device)
+        
+        return predictor 

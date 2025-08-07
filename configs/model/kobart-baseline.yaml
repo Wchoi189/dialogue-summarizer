@@ -1,0 +1,36 @@
+# @package model
+# KoBART model configuration - WORKING BASELINE SETTINGS
+
+name: "kobart"
+architecture: "bart"
+
+# ✅ REVERT: Use the working model from baseline
+model_name_or_path: "digit82/kobart-summarization"
+
+# Model parameters (keep your existing ones)
+# parameters:
+#   encoder_layers: 12
+#   decoder_layers: 12
+#   encoder_attention_heads: 16
+#   decoder_attention_heads: 16
+#   encoder_ffn_dim: 3072
+#   decoder_ffn_dim: 3072
+#   d_model: 768
+
+# Tokenizer settings - MATCH BASELINE
+tokenizer:
+  name_or_path: "digit82/kobart-summarization"
+  use_fast: true
+  add_special_tokens: true
+  
+  # ✅ EXACT MATCH: Baseline tokenizer settings
+  max_source_length: 512
+  max_target_length: 100
+  
+# REMOVED: additional_special_tokens (now in dataset config only)
+
+# Model compilation - DISABLE for stability
+compile:
+  enabled: false
+  mode: "default"
+  dynamic: false

@@ -5,18 +5,20 @@ name: "kobart"
 architecture: "bart"
 
 # Model path/name from HuggingFace
-model_name_or_path: "digit82/kobart-summarization"
+model_name_or_path: "digit82/kobart-summarization"  # Revert to working model
+
 
 # Model parameters
+# REMOVED: All parameter modifications that break the model
 parameters:
-  # BART specific
-  encoder_layers: 12
-  decoder_layers: 12
-  encoder_attention_heads: 16
-  decoder_attention_heads: 16
-  encoder_ffn_dim: 3072
-  decoder_ffn_dim: 3072
-  d_model: 768
+  # # BART specific
+  # encoder_layers: 12
+  # decoder_layers: 12
+  # encoder_attention_heads: 16
+  # decoder_attention_heads: 16
+  # encoder_ffn_dim: 3072
+  # decoder_ffn_dim: 3072
+  # d_model: 768
   
   # Vocabulary
   vocab_size: null  # Will be set from tokenizer
@@ -29,7 +31,7 @@ parameters:
 
 # Tokenizer settings
 tokenizer:
-  name_or_path: "digit82/kobart-summarization"
+  name_or_path: "digit82/kobart-summarization"  # Use same model for tokenizer
   use_fast: true
   add_special_tokens: true
   
@@ -37,14 +39,6 @@ tokenizer:
   max_source_length: 512
   max_target_length: 100
   
-  # Special tokens (must match dataset config)
-  additional_special_tokens:
-    - "#Person1#"
-    - "#Person2#"
-    - "#Person3#"
-    - "#PhoneNumber#"
-    - "#Address#"
-    - "#PassportNumber#"
 
 # Model initialization
 init_weights: true
@@ -52,7 +46,7 @@ tie_word_embeddings: true
 
 # Model specific settings for training
 training_mode:
-  gradient_checkpointing: false
+  gradient_checkpointing: true
   use_cache: false  # Disable during training
   
 # Model specific settings for inference
@@ -65,4 +59,4 @@ inference_mode:
 compile:
   enabled: true  # ✅ CHANGE from false
   mode: "default"
-  dynamic: false
+  dynamic: true

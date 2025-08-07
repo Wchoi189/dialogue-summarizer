@@ -1,0 +1,89 @@
+# @package training
+# Performance-oriented training configuration for a SINGLE GPU
+
+# Training strategy
+strategy: "auto"             # ◀️ REVERTED: 'auto' is best for a single GPU
+accelerator: "auto"
+devices: 1                   # ◀️ REVERTED: Target your single available GPU
+precision: "16-mixed"
+
+# Epochs and steps
+max_epochs: 20
+max_steps: -1
+min_epochs: 1
+
+# Batch sizes
+# Effective batch size is 16 * 2 = 32. Your 24GB GPU can handle this well.
+batch_size: 16
+eval_batch_size: 16
+accumulate_grad_batches: 2
+
+# Optimizer
+optimizer:
+  name: "adamw"
+  lr: 3.0e-5
+  weight_decay: 0.05
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+# Learning rate scheduler
+lr_scheduler:
+  name: "cosine"
+  warmup_ratio: 0.1
+  warmup_steps: null
+  max_lr: ${training.optimizer.lr}
+  min_lr: 1.0e-7
+
+# Validation and evaluation
+val_check_interval: 1.0
+check_val_every_n_epoch: 1
+evaluation_strategy: "epoch"
+predict_with_generate: true
+
+# Generation settings for validation
+generation:
+  max_length: 128
+  min_length: 10
+  num_beams: 5
+  no_repeat_ngram_size: 3
+  early_stopping: true
+  do_sample: false
+  length_penalty: 2.0
+
+# Model saving
+save_strategy: "epoch"
+save_total_limit: 5
+save_top_k: 3
+monitor: "val/rouge_f"
+mode: "max"
+save_on_train_epoch_end: false
+
+# Early stopping
+early_stopping:
+  enabled: true
+  monitor: "val/rouge_f"
+  patience: 5
+  min_delta: 0.001
+  mode: "max"
+  verbose: true
+
+# Gradient settings
+gradient_clip_val: 1.0
+gradient_clip_algorithm: "norm"
+
+# Logging
+log_every_n_steps: 100
+logging_strategy: "epoch"
+
+# Memory optimization
+dataloader_num_workers: 16  # ◀️ ADJUSTED: 8 is a solid number for a single GPU and your CPU
+dataloader_pin_memory: true
+persistent_workers: true
+
+# Debugging
+fast_dev_run: false
+overfit_batches: 0.0
+limit_train_batches: 1.0
+limit_val_batches: 1.0
+limit_test_batches: 1.0
+# ... (rest of the file is the same)

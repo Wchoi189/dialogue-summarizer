@@ -1,0 +1,22 @@
+# =============================================================================
+# configs/experiment/aggressive.yaml  
+# =============================================================================
+# @package _global_
+# More aggressive training experiment
+# Overrides for the 'aggressive' experiment
+
+training:
+  max_epochs: 12
+  optimizer:
+    lr: 1e-5
+  early_stopping:
+    patience: 3
+
+generation:
+  max_length: 80
+  repetition_penalty: 1.4
+  length_penalty: 0.9
+
+wandb:
+  tags: ["aggressive", "kobart", "higher-lr"]
+  notes: "Aggressive training with higher learning rate"
