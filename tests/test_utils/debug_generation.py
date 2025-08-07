@@ -1,115 +1,104 @@
+#!/usr/bin/env python3
+"""
+Debug script to test the current model's generation quality
+"""
+
 import torch
-from icecream import ic
-import sys
-from pathlib import Path
+from transformers import AutoTokenizer, BartForConditionalGeneration
 
-# Add project root to path to allow imports
-# sys.path.insert(0, str(Path(__file__).parent.parent.parent.absolute()))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-from models.kobart_model import KoBARTSummarizationModel
-from utils.config_utils import ConfigManager
-from utils.metrics import compute_rouge_scores
-
-def debug_generation(
-    checkpoint_path: str,
-    dialogue: str,
-    ground_truth: str = None,
-    generation_params: dict = None,
-):
-    """
-    Loads a model checkpoint and tests generation on a single dialogue.
-    """
-    ic("--- Starting Generation Debug ---")
-    ic(f"Checkpoint: {checkpoint_path}")
-
-    # 1. Load Model and Config
-    try:
-        config_manager = ConfigManager()
-        cfg = config_manager.load_config(config_name="kobart-base-v2.yaml")
-
-        model = KoBARTSummarizationModel.load_from_checkpoint(checkpoint_path, cfg=cfg)
-        model.to("cuda" if torch.cuda.is_available() else "cpu")
-        model.eval()
-        tokenizer = model.tokenizer
-        ic("Model and tokenizer loaded successfully.")
-    except Exception as e:
-        ic("Error loading model!", e)
-        return
-
-    # 2. Define Generation Parameters
-    if generation_params is None:
-        # Default parameters from your training config
-        generation_params = cfg.training.generation
-    ic(f"Using Generation Parameters: {generation_params}")
-
-    # 3. Prepare Input and Generate
-    inputs = tokenizer(
-        dialogue,
-        return_tensors="pt",
-        truncation=True,
-        max_length=512,
-    ).to(model.device)
-
-    prediction = ""
-    with torch.no_grad():
-        output_ids = model.generate(
-            input_ids=inputs["input_ids"],
-            attention_mask=inputs["attention_mask"],
-            **generation_params,
-        )
-        prediction = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-
-    # 4. Display Results
-    print("\n" + "="*50)
-    print("📜 INPUT DIALOGUE:")
-    print(dialogue)
-    print("="*50)
-    if ground_truth:
-        print("🎯 GROUND TRUTH:")
-        print(ground_truth)
-        print(f"(Length: {len(ground_truth)} chars)")
-        print("="*50)
+def test_model_generation():
+    print("=== TESTING KoBARTSummarizationModel GENERATION ===")
     
-    print("🤖 MODEL PREDICTION:")
-    print(prediction)
-    print(f"(Length: {len(prediction)} chars)")
-    print("="*50)
-
-    # 5. Evaluate
-    if ground_truth:
-        scores = compute_rouge_scores([prediction], [ground_truth])
-        ic(scores)
-
+    # Load the original pretrained model
+    tokenizer = AutoTokenizer.from_pretrained('digit82/kobart-summarization')
+    model_tuple = BartForConditionalGeneration.from_pretrained('digit82/kobart-summarization', output_loading_info=False)
+    model = model_tuple[0] if isinstance(model_tuple, tuple) else model_tuple
+    
+    # Add special tokens
+    special_tokens = ['#Person1#', '#Person2#', '#Person3#', '#PhoneNumber#', '#Address#', '#PassportNumber#']
+    num_added = tokenizer.add_special_tokens({'additional_special_tokens': special_tokens})
+    print(f"Added {num_added} special tokens")
+    
+    # Resize model embeddings
+    if num_added > 0:
+        model.resize_token_embeddings(len(tokenizer))
+        print(f"Resized model embeddings to {len(tokenizer)}")
+    
+    # Test dialogue from your data
+    test_dialogue = '''#Person1#: 안녕하세요, 스미스씨. 저는 호킨스 의사입니다. 오늘 왜 오셨나요?
+#Person2#: 건강검진을 받는 것이 좋을 것 같아서요.
+#Person1#: 그렇군요, 당신은 5년 동안 건강검진을 받지 않았습니다. 매년 받아야 합니다.
+#Person2#: 알고 있습니다. 하지만 아무 문제가 없다면 왜 의사를 만나러 가야 하나요?
+#Person1#: 심각한 질병을 피하는 가장 좋은 방법은 이를 조기에 발견하는 것입니다. 그러니 당신의 건강을 위해 최소한 매년 한 번은 오세요.
+#Person2#: 알겠습니다.'''
+    
+    expected_summary = "스미스씨가 건강검진을 받고 있고, 호킨스 의사는 매년 건강검진을 받는 것을 권장합니다."
+    
+    # Tokenize input
+    inputs = tokenizer(
+        test_dialogue,
+        max_length=512,
+        truncation=True,
+        padding=False,
+        return_tensors='pt'
+    )
+    
+    print(f"Input length: {inputs['input_ids'].shape[1]} tokens")
+    
+    # Test different generation configs
+    generation_configs = [
+        {
+            "name": "Current (fixed)",
+            "max_length": 150,
+            "min_length": 20,
+            "num_beams": 4,
+            "no_repeat_ngram_size": 3,
+            "early_stopping": True,
+            "repetition_penalty": 1.3,
+            "length_penalty": 1.5,
+            "do_sample": False
+        },
+        {
+            "name": "Conservative",
+            "max_length": 100,
+            "min_length": 10,
+            "num_beams": 2,
+            "no_repeat_ngram_size": 2,
+            "early_stopping": True,
+            "repetition_penalty": 1.2,
+            "length_penalty": 1.0,
+            "do_sample": False
+        },
+        {
+            "name": "Sampling",
+            "max_length": 100,
+            "min_length": 10,
+            "do_sample": True,
+            "top_p": 0.9,
+            "temperature": 0.7,
+            "repetition_penalty": 1.3,
+            "no_repeat_ngram_size": 3
+        }
+    ]
+    
+    print("\n=== GENERATION TESTS ===")
+    for config in generation_configs:
+        name = config.pop("name")
+        print(f"\n{name}:")
+        
+        with torch.no_grad():
+            outputs = model.generate(
+                input_ids=inputs['input_ids'],
+                attention_mask=inputs['attention_mask'],
+                **config
+            )
+        
+        generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        print(f"  Generated: {repr(generated_text)}")
+        print(f"  Length: {len(generated_text)} chars")
+    
+    print(f"\nExpected: {repr(expected_summary)}")
+    print(f"Expected length: {len(expected_summary)} chars")
 
 if __name__ == "__main__":
-    # --- Step 1: CONFIGURE YOUR TEST ---
-    # Update this path to your best-performing model checkpoint
-    MODEL_CHECKPOINT = "outputs/models/best-epoch=04-val_rouge_f=0.0000.ckpt"
-    
-    # Paste the problematic dialogue and its ground truth here
-    TEST_DIALOGUE = "주제: 의사 상담 | 대화: #Person1# : 안녕하세요, 오늘 기분이 어떠세요? #Person2# : 요즘 숨쉬기가 힘들어요. #Person1# : 최근에 감기에 걸렸나요? #Person2# : 아니요, 특별히 아픈 곳은 없어요. #Person1# : 그럼 천식 검사를 위해 폐 전문의에게 가보는 게 좋겠어요. 알레르기가 있으신가요? #Person2# : 네, 몇 가지 있어요."
-    GROUND_TRUTH_SUMMARY = "#Person2#는 숨쉬기 어려워합니다. 의사는 #Person2#에게 증상을 확인하고, 천식 검사를 위해 폐 전문의에게 가볼 것을 권합니다."
-    
-    # --- Step 2: EXPERIMENT WITH PARAMETERS ---
-    # Modify these parameters to see how they affect the output
-    custom_params = {
-        "max_length": 256,
-        "min_length": 15,
-        "num_beams": 5,
-        "repetition_penalty": 1.8,   # More aggressive penalty
-        "length_penalty": 0.8,     # Penalize long outputs
-        "no_repeat_ngram_size": 3,
-        "early_stopping": True,
-    }
-
-    # --- Step 3: RUN THE SCRIPT ---
-    if not Path(MODEL_CHECKPOINT).exists():
-        print(f"ERROR: Model checkpoint not found at '{MODEL_CHECKPOINT}'")
-        print("Please update the 'MODEL_CHECKPOINT' variable in the script.")
-    else:
-        debug_generation(
-            checkpoint_path=MODEL_CHECKPOINT,
-            dialogue=TEST_DIALOGUE,
-            ground_truth=GROUND_TRUTH_SUMMARY,
-            generation_params=custom_params
-        )
+    test_model_generation()

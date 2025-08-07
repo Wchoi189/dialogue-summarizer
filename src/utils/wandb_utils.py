@@ -71,7 +71,7 @@ class WandBManager:
 
         # Model name
         model_name = self.cfg.model.get('name', 'model').replace("_", "-")
-        
+
         # 📝 NEW: Get the experiment name
         experiment_name = self.cfg.get('experiment_name', 'no-exp')
         
@@ -89,14 +89,6 @@ class WandBManager:
         patience = self.cfg.training.early_stopping.get('patience')
         es_str = f"es{patience}" if patience else ""
 
-        # # --- 2. Assemble the Run Name ---
-        
-        # # Create the detailed middle part of the name
-        # details_parts = [model_name, strategy, f"b{batch_size}", f"lr{lr_str}", es_str]
-        # model_details = "-".join(filter(None, details_parts)) # Filter removes empty strings
-
-        # # Final desired format - use placeholder that can be replaced later
-        # run_name = f"{user_prefix}_(submission)_{model_details}_PLACEHOLDER"
         # --- 2. Assemble the Run Name ---
         
         # 📝 FIX: Include the experiment name in the details list
@@ -105,7 +97,7 @@ class WandBManager:
 
         # Final desired format - use placeholder that can be replaced later
         run_name = f"{user_prefix}_(submission)_{model_details}_PLACEHOLDER"
-
+        
         return run_name
     
     def finalize_run_name_with_score(self, rouge_score: float):

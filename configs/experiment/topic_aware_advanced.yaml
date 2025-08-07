@@ -1,0 +1,70 @@
+# configs/experiment/topic_aware_advanced.yaml
+# @package _global_
+# Advanced topic-aware dialogue summarization
+
+experiment_name: "topic_aware_advanced"
+
+# =============================================================================
+# TOPIC-ENHANCED PREPROCESSING
+# =============================================================================
+preprocessing:
+  strategy: "topic_aware"
+  max_input_length: 512
+  max_target_length: 120
+  truncation: true
+  padding: false
+  normalize_whitespace: true
+  remove_extra_newlines: true
+  
+  # Topic enhancement
+  topic_map:
+    "음식 주문": "<음식>"
+    "취업 면접": "<직업>"
+    "길 안내": "<생활>"
+    "호텔 체크인": "<여행>"
+    "건강검진": "<의료>"
+    "업무 미팅": "<업무>"
+    "일정 조율": "<일정>"
+    # Add fallback
+    "_default": "<대화>"
+  
+  additional_special_tokens:
+    - "<음식>"
+    - "<직업>"
+    - "<생활>"
+    - "<여행>"
+    - "<의료>"
+    - "<업무>"
+    - "<일정>"
+    - "<대화>"
+
+# =============================================================================
+# ENHANCED GENERATION FOR TOPICS
+# =============================================================================
+generation:
+  max_length: 85    # Slightly longer for topic context
+  min_length: 15
+  num_beams: 8      # More thorough search
+  repetition_penalty: 1.4
+  length_penalty: 0.9
+  diversity_penalty: 0.1  # Encourage diverse vocabulary
+  early_stopping: true
+  do_sample: false
+
+# =============================================================================
+# OPTIMIZED TRAINING
+# =============================================================================
+training:
+  max_epochs: 20
+  optimizer:
+    lr: 2e-5
+    weight_decay: 0.01
+  lr_scheduler:
+    warmup_ratio: 0.15  # Longer warmup for stability
+  early_stopping:
+    patience: 7
+    min_delta: 0.003
+
+wandb:
+  tags: ["topic_aware", "advanced", "competition"]
+  notes: "Topic-aware summarization with enhanced preprocessing"

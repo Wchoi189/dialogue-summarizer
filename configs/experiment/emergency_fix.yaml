@@ -1,0 +1,70 @@
+# configs/experiment/emergency_fix.yaml
+# @package _global_
+# Emergency fix to match peer performance patterns
+
+experiment_name: "emergency_fix"
+
+# =============================================================================
+# DISABLE TOKEN SWAPPING ENTIRELY
+# =============================================================================
+preprocessing:
+  strategy: "std"
+  max_input_length: 512
+  max_target_length: 120  # Keep longer summaries like peer
+  truncation: true
+  padding: false
+  normalize_whitespace: true
+  remove_extra_newlines: true
+  # ✅ CRITICAL: Disable token swapping completely
+  token_swapping:
+    enable: false
+
+postprocessing:
+  # ✅ CRITICAL: Disable token swapping in postprocessing too
+  token_swapping:
+    enable: false
+  remove_tokens:
+    - "<usr>"
+    - "<s>"
+    - "</s>"
+    - "<pad>"
+    - "<unk>"
+  text_cleaning:
+    strip_whitespace: true
+    normalize_whitespace: true
+    remove_empty_lines: true
+  korean_specific:
+    remove_special_markers: false  # Keep #Person# tokens
+    normalize_punctuation: true
+  advanced:
+    remove_repetitive_phrases: true
+    fix_incomplete_sentences: true
+    min_length: 10  # Longer minimum like peer
+
+# =============================================================================
+# PEER-MATCHING GENERATION SETTINGS
+# =============================================================================
+generation:
+  max_length: 80    # Peer summaries are longer
+  min_length: 15    # Higher minimum
+  num_beams: 6      # More beam search
+  repetition_penalty: 1.5  # Less aggressive
+  length_penalty: 0.8      # Encourage longer output
+  early_stopping: true
+  do_sample: false
+
+# =============================================================================
+# TRAINING OPTIMIZATIONS
+# =============================================================================
+training:
+  max_epochs: 15
+  optimizer:
+    lr: 3e-5  # Slightly higher learning rate
+    weight_decay: 0.01
+  early_stopping:
+    patience: 6
+    min_delta: 0.005
+
+wandb:
+  tags: ["emergency_fix", "no_token_swap", "peer_match"]
+  notes: "Emergency fix to match peer token format and length patterns"

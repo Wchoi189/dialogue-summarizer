@@ -1,0 +1,79 @@
+# configs/experiment/emergency_fix_v2.yaml
+# @package _global_
+# CORRECTED emergency fix with proper config precedence
+
+experiment_name: "emergency_fix_v2"
+
+# =============================================================================
+# OVERRIDE GENERATION SETTINGS AT TOP LEVEL (CRITICAL FIX)
+# =============================================================================
+generation:
+  max_length: 80    # ✅ MUST override base config
+  min_length: 15    # ✅ MUST override base config  
+  num_beams: 6
+  repetition_penalty: 1.5
+  length_penalty: 0.8
+  early_stopping: true
+  do_sample: false
+  no_repeat_ngram_size: 3  # Add this to reduce repetition
+
+# =============================================================================
+# PREPROCESSING - NO TOKEN SWAPPING
+# =============================================================================
+preprocessing:
+  strategy: "std"
+  max_input_length: 512
+  max_target_length: 120    # ✅ Longer summaries like peer
+  truncation: true
+  padding: false
+  normalize_whitespace: true
+  remove_extra_newlines: true
+  token_swapping:
+    enable: false  # ✅ Completely disabled
+
+# =============================================================================
+# POSTPROCESSING - IMPROVED CLEANING
+# =============================================================================
+postprocessing:
+  token_swapping:
+    enable: false  # ✅ Completely disabled
+  remove_tokens:
+    - "<usr>"
+    - "<s>"
+    - "</s>"
+    - "<pad>"
+    - "<unk>"
+  text_cleaning:
+    strip_whitespace: true
+    normalize_whitespace: true
+    remove_empty_lines: true
+  korean_specific:
+    remove_special_markers: false  # ✅ Keep #Person# tokens
+    normalize_punctuation: true
+  advanced:
+    remove_repetitive_phrases: true
+    fix_incomplete_sentences: true
+    min_length: 12  # ✅ Slightly longer minimum like peer
+
+# =============================================================================
+# TRAINING - OPTIMIZED SETTINGS
+# =============================================================================
+training:
+  max_epochs: 12
+  optimizer:
+    lr: 3e-5      # ✅ Higher learning rate
+    weight_decay: 0.02  # ✅ Increased regularization
+  early_stopping:
+    patience: 5
+    min_delta: 0.008   # ✅ More sensitive to improvements
+  
+# =============================================================================
+# DATASET - BATCH SIZE OPTIMIZATION
+# =============================================================================
+dataset:
+  batch_size: 32    # ✅ Smaller batches for better gradients
+  eval_batch_size: 16  # ✅ Even smaller for evaluation
+
+wandb:
+  tags: ["emergency_fix_v2", "config_corrected", "peer_target"]
+  notes: "Corrected config precedence issues, targeting peer performance"

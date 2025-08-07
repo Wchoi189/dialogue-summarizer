@@ -68,9 +68,9 @@ A modular, production-ready dialogue summarization system built with PyTorch Lig
     
     # For prediction
     python scripts/inference.py predict \
-    /home/wb2x/workspace/dialogue-summarizer/outputs/models/best-epoch=01-val_rouge_f=val/rouge_f=0.6217.ckpt \
+    /home/wb2x/workspace/dialogue-summarizer/outputs/models/best-epoch=03-val_rouge_f=val/rouge_f=0.6118.ckpt \
     data/test.csv \
-    subission_unbiased.csv
+    emergency_fix.csv
 
     # (DEPRECATED) For prediction (before using centralized config)
     python scripts/inference.py predict \

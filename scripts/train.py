@@ -433,39 +433,22 @@ def cli():
     pass
 
 @cli.command()
-@click.option(
-    '--config-name', 
-    # default='kobart-base-v2', 
-    # ✅ FIX: Remove the hard-coded default
-    default=None,
-    help='Name of the main configuration file to use.'
-)
-@click.option(
-    '--experiment', 
-    default=None, 
-    help='Name of an experiment to run (uses the centralized config).'
-)
-@click.option(
-    '--resume-from', 
-    type=click.Path(exists=True), 
-    help='Checkpoint to resume from'
-)
-@click.option(
-    '--override', 
-    'overrides', 
-    multiple=True, 
-    help='Custom Hydra overrides (e.g., "training.max_epochs=5")'
-)
+@click.option('--config-name', default=None, help='Name of the main configuration file to use.')
+@click.option('--experiment', default=None, help='Name of an experiment to run (uses the centralized config).')
+@click.option('--resume-from', type=click.Path(exists=True), help='Checkpoint to resume from')
+@click.option('--override', 'overrides', multiple=True, help='Custom Hydra overrides (e.g., "training.max_epochs=5")')
 @click.option('--max-epochs', type=int, help='Override training.max_epochs')
 @click.option('--batch-size', type=int, help='Override dataset.batch_size')
 @click.option('--learning-rate', type=float, help='Override training.optimizer.lr')
 @click.option('--fast-dev-run', is_flag=True, help='Run a single batch for debugging')
-def train(experiment, config_name, resume_from, overrides, max_epochs, batch_size, learning_rate, fast_dev_run):
+@click.argument('hydra_overrides', nargs=-1)
+def train(experiment, config_name, resume_from, overrides, max_epochs, batch_size, learning_rate, fast_dev_run, hydra_overrides):
     """
     Train the model using either a specific experiment or a legacy config file.
     """
     trainer = DialogueTrainer()
-    final_overrides = list(overrides)
+    # Merge Click options, --override, and Hydra-style CLI overrides
+    final_overrides = list(overrides) + list(hydra_overrides)
 
     if max_epochs is not None:
         final_overrides.append(f"training.max_epochs={max_epochs}")
@@ -493,14 +476,23 @@ def train(experiment, config_name, resume_from, overrides, max_epochs, batch_siz
     #     config_to_load = 'config-baseline-centralized'
     #     final_overrides.append("experiment=baseline")
     #     ic("No config or experiment specified. Defaulting to the 'baseline' experiment.")
-    # ✅ FIX: Update the logic to handle the new defaults
+    # Detect experiment from hydra_overrides if not set via --experiment
+    experiment_override = None
+    for item in hydra_overrides:
+        if item.startswith("+experiment="):
+            experiment_override = item.split("=", 1)[1]
+            break
+
     if config_name:
         config_to_load = config_name
-        if experiment:
-            final_overrides.append(f"experiment={experiment}")
-    elif experiment:
-        config_to_load = "config-baseline-centralized" # Fallback to a sensible default
-        final_overrides.append(f"experiment={experiment}")
+        # Don't append experiment twice if already in hydra_overrides
+        if experiment and not experiment_override:
+            final_overrides.append(f"+experiment={experiment}")
+    elif experiment or experiment_override:
+        config_to_load = "config-baseline-centralized"
+        # Don't append experiment twice if already in hydra_overrides
+        if experiment and not experiment_override:
+            final_overrides.append(f"+experiment={experiment}")
     else:
         raise ValueError("Must specify a config or experiment to run.")
 

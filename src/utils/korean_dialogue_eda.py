@@ -14,11 +14,13 @@ from collections import Counter
 import json
 from typing import Dict, List, Tuple
 import warnings
+from matplotlib.figure import Figure
 warnings.filterwarnings('ignore')
-
+plt.rcParams['font.family'] = 'NanumGothic'
+plt.rcParams['axes.unicode_minus'] = False
+sns.set_theme(style="whitegrid", font="NanumGothic", font_scale=1.1, rc={'axes.unicode_minus': False})
 # Set up plotting
 plt.style.use('default')
-sns.set_palette("husl")
 plt.rcParams['figure.figsize'] = (12, 8)
 plt.rcParams['font.size'] = 10
 
