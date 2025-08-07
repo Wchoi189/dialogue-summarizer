@@ -177,21 +177,7 @@ python scripts/train.py train \
     --override training.optimizer.weight_decay=0.02 \
     --override text_processing.max_input_length=256
 
-You're right to check the USAGE_GUIDE.md; our recent fixes have made some of its examples outdated. The guide still shows direct flags like --learning-rate, which no longer exist.
-
-I've drafted the necessary updates to align the guide with the current script's functionality. The main change is removing the old, non-functional flags and updating the examples to use either the new high-level flags (--max-epochs, --batch-size) or the --override syntax.
-
-Suggested Updates for USAGE_GUIDE.md
-Here are the snippets to replace the outdated sections in your USAGE_GUIDE.md file.
-
-Update Section 2: Overriding Specific Parameters
-This section needs the biggest change. The old examples with --learning-rate are incorrect. The new version shows the correct way to use the new flags we added and the --override method for more specific parameters.
-
-Replace the old Section 2 with this:
-
-Markdown
-
-# =============================================================================
+=============================================================================
 # 2. OVERRIDING SPECIFIC PARAMETERS
 # =============================================================================
 
